@@ -1,0 +1,43 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{4427AD54-8363-4A88-8376-F28B5318A304}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TubeWorks.Geometry", "src\TubeWorks.Geometry\TubeWorks.Geometry.csproj", "{60339D2F-0340-48B1-9575-011E614543C4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TubeWorks.AddIn", "src\TubeWorks.AddIn\TubeWorks.AddIn.csproj", "{BE7DF9EC-7E35-46F1-8D33-8BCEFC104367}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D8E0F934-BDCC-4867-95B6-1F6390ED2341}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TubeWorks.Geometry.Tests", "tests\TubeWorks.Geometry.Tests\TubeWorks.Geometry.Tests.csproj", "{AE085AD3-1A31-4986-BA92-9293BDF99074}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{60339D2F-0340-48B1-9575-011E614543C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{60339D2F-0340-48B1-9575-011E614543C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{60339D2F-0340-48B1-9575-011E614543C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{60339D2F-0340-48B1-9575-011E614543C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BE7DF9EC-7E35-46F1-8D33-8BCEFC104367}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BE7DF9EC-7E35-46F1-8D33-8BCEFC104367}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BE7DF9EC-7E35-46F1-8D33-8BCEFC104367}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BE7DF9EC-7E35-46F1-8D33-8BCEFC104367}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AE085AD3-1A31-4986-BA92-9293BDF99074}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AE085AD3-1A31-4986-BA92-9293BDF99074}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AE085AD3-1A31-4986-BA92-9293BDF99074}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AE085AD3-1A31-4986-BA92-9293BDF99074}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{60339D2F-0340-48B1-9575-011E614543C4} = {4427AD54-8363-4A88-8376-F28B5318A304}
+		{BE7DF9EC-7E35-46F1-8D33-8BCEFC104367} = {4427AD54-8363-4A88-8376-F28B5318A304}
+		{AE085AD3-1A31-4986-BA92-9293BDF99074} = {D8E0F934-BDCC-4867-95B6-1F6390ED2341}
+	EndGlobalSection
+EndGlobal

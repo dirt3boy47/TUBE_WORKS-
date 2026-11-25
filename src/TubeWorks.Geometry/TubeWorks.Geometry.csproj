@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TubeWorks.Geometry</RootNamespace>
+    <AssemblyName>TubeWorks.Geometry</AssemblyName>
+    <Description>Pure geometry engine of TubeWorks Designer. No SOLIDWORKS dependency.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+</Project>
