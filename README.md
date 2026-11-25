@@ -2,22 +2,20 @@
 
 Native SOLIDWORKS add-in for parametric circular tube design: select a tube end face, bend it, extend it, flatten it to a straight blank, and get the bend table.
 
-**Status: release 0.1.0, Phase 1 MVP.** The geometry engine is tested (24 automated tests). The add-in compiles against the SOLIDWORKS 2026 API with no errors or warnings. **It has not yet been run inside SOLIDWORKS.** Run `docs/TEST-PLAN.md` part B before you use it for production.
+**Status: release 0.2.0 (Phase 1 + first part of Phase 2).** The geometry engine has 36 automated tests, all passing. The add-in compiles with no errors or warnings against the SOLIDWORKS 2016 and 2026 APIs. **It has not yet been run inside SOLIDWORKS.** Run `docs/TEST-PLAN.md` part B before you use it for production.
 
-| Implemented (Phase 1) | Planned (shown disabled in the toolbar) |
+| Implemented | Planned (shown disabled, or not yet in the toolbar) |
 |---|---|
-| Base Tube, Face Bend, Straight Extension, Edit Bend, Reverse Bend, Set Bend Plane, Flatten Tube (straight blank), Export (STEP, Parasolid, SLDPRT, centreline CSV), Bend Table (CSV, XYZ, LRA), Tube Properties, Manufacturing Check | Multi Bend, Tube Trim, Tube Notch, Unbend, Rebend, Unwrap Tube Surface; DXF/DWG; drawings; compensation; postprocessors |
+| Base Tube, Face Bend, Straight Extension, Edit Bend, Reverse Bend, Set Bend Plane, **Unbend, Rebend (with exact transfer of cuts in straight segments)**, Flatten Tube (straight blank, keeps cuts), **Unwrap Tube Surface → DXF with layers**, Export (STEP, Parasolid, SLDPRT, centreline CSV), Bend Table (CSV, XYZ, LRA), Tube Properties, Manufacturing Check (now also cuts in bends), **Tube Library editor with CSV/XML import/export** | Multi Bend, Tube Trim, Tube Notch; automatic drawings; DWG; compensation; postprocessors |
 
-## Quick start
+## Install
+
+Run `TubeWorksSetup-0.2.0.exe` (from the CI artifact or `installer/build-installer.sh`) as Administrator with SOLIDWORKS closed. See [docs/BUILD-AND-INSTALL.md](docs/BUILD-AND-INSTALL.md).
+
+## Build from source
 
 ```bash
 dotnet build TubeWorks.sln -c Release
-```
-
-Then, as Administrator with SOLIDWORKS closed:
-
-```bash
-powershell -ExecutionPolicy Bypass -File installer\Install-TubeWorks.ps1
 ```
 
 ## Documents

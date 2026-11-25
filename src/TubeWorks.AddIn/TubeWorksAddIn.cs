@@ -50,14 +50,15 @@ namespace TubeWorks.AddIn
             new Cmd { Name = "Set Bend Plane", Tip = "Align the selected bend with a plane, face, edge or axis", Callback = nameof(OnSetBendPlane), Implemented = true },
             new Cmd { Name = "Tube Trim", Tip = "Planned (Phase 2): trim a tube end", Callback = nameof(OnPlanned) },
             new Cmd { Name = "Tube Notch", Tip = "Planned (Phase 2): notch a tube end", Callback = nameof(OnPlanned) },
-            new Cmd { Name = "Unbend", Tip = "Planned (Phase 2): straighten individual bends", Callback = nameof(OnPlanned) },
-            new Cmd { Name = "Rebend", Tip = "Planned (Phase 2): restore straightened bends", Callback = nameof(OnPlanned) },
+            new Cmd { Name = "Unbend", Tip = "Straighten one, several or all bends about a fixed segment", Callback = nameof(OnUnbend), Implemented = true },
+            new Cmd { Name = "Rebend", Tip = "Restore the bends of the active Unbend; transfer cuts made while straight", Callback = nameof(OnRebend), Implemented = true },
             new Cmd { Name = "Flatten Tube", Tip = "Switch between the bent design and the straight manufacturing blank", Callback = nameof(OnFlatten), Implemented = true },
-            new Cmd { Name = "Unwrap Tube Surface", Tip = "Planned (Phase 2): 2D development of the tube surface", Callback = nameof(OnPlanned) },
+            new Cmd { Name = "Unwrap Tube Surface", Tip = "2D development of the tube surface with cut-outs and bend markings, to DXF", Callback = nameof(OnUnwrap), Implemented = true },
             new Cmd { Name = "Export Flat Pattern", Tip = "Export the bent or straight tube (STEP, Parasolid, SOLIDWORKS part)", Callback = nameof(OnExport), Implemented = true },
             new Cmd { Name = "Bend Table", Tip = "Bend table with XYZ and LRA data; CSV export", Callback = nameof(OnBendTable), Implemented = true },
             new Cmd { Name = "Tube Properties", Tip = "Profile, material and developed length", Callback = nameof(OnTubeProperties), Implemented = true },
-            new Cmd { Name = "Manufacturing Check", Tip = "Check bend radii, straights, angles and self-intersection", Callback = nameof(OnManufacturingCheck), Implemented = true },
+            new Cmd { Name = "Manufacturing Check", Tip = "Check bend radii, straights, angles, self-intersection and cuts in bends", Callback = nameof(OnManufacturingCheck), Implemented = true },
+            new Cmd { Name = "Tube Library", Tip = "Edit tube presets, tooling radii and limits; import and export", Callback = nameof(OnLibrary), Implemented = true },
         };
 
         // ------------------------------------------------------------------ ISwAddin
@@ -187,8 +188,36 @@ namespace TubeWorks.AddIn
 
         public void OnBaseTube() => Run("Base Tube", m => { TubeFeatureStore.EnsureBentState(m); BaseTubePage.Create(App, m); });
 
+        private bool BlockWhenUnbent(IModelDoc2 m)
+        {
+            if (!Features.StateFeatureBase.ActiveUnbends(TubeFeatureStore.Scan(m)).Any()) return false;
+            SwUtil.Message(App, "The tube is unbent. Add a Rebend before you add tube segments.");
+            return true;
+        }
+
+        public void OnUnbend() => Run("Unbend", m => { TubeFeatureStore.EnsureBentState(m); UnbendPage.Create(App, m); });
+
+        public void OnRebend() => Run("Rebend", m =>
+        {
+            var active = Features.StateFeatureBase.ActiveUnbends(TubeFeatureStore.Scan(m)).LastOrDefault();
+            if (active == null) { SwUtil.Message(App, "There is no active Unbend to rebend."); return; }
+            var all = TubeFeatureStore.Scan(m);
+            var path = TubeFeatureStore.Solve(all).Paths.FirstOrDefault(p => p.RootId == active.Data.ParentId);
+            var body = (path != null ? TubeFeatureStore.TubeBody(all, path) : null) ?? TubeFeatureStore.BodyOf(active.Feature);
+            m.ClearSelection2(true);
+            var data = new TubeFeatureData { Kind = TubeFeatureKind.Rebend, ParentId = active.Data.Id };
+            if (TubeFeatureStore.Insert(m, data, body, TubeFeatureStore.NextName(m, TubeFeatureKind.Rebend)) == null)
+                SwUtil.Message(App, "SOLIDWORKS could not create the Tube Rebend feature.", swMessageBoxIcon_e.swMbStop);
+            else UnbendPage.ShowReport(App, m, data.Id, "Rebend");
+        });
+
+        public void OnUnwrap() => Run("Unwrap Tube Surface", m => UnwrapForm.ShowFor(App, m));
+
+        public void OnLibrary() { try { LibraryForm.ShowFor(App); } catch (Exception ex) { Log.Error("Library", ex); SwUtil.Message(App, ex.Message, swMessageBoxIcon_e.swMbStop); } }
+
         public void OnFaceBend() => Run("Face Bend", m =>
         {
+            if (BlockWhenUnbent(m)) return;
             var face = SelectedFace(m);
             if (TubeFeatureStore.EnsureBentState(m)) face = null; // the face of the flat blank is not valid
             FaceBendPage.Create(App, m, face);
@@ -196,6 +225,7 @@ namespace TubeWorks.AddIn
 
         public void OnStraight() => Run("Straight Extension", m =>
         {
+            if (BlockWhenUnbent(m)) return;
             var face = SelectedFace(m);
             if (TubeFeatureStore.EnsureBentState(m)) face = null;
             StraightPage.Create(App, m, face);
@@ -244,13 +274,13 @@ namespace TubeWorks.AddIn
             var chain = TubeFeatureStore.Solve(all);
             var path = chain.Paths.FirstOrDefault(p => p.RootIsBaseTube);
             if (path == null) { SwUtil.Message(App, "Flatten Tube needs a valid tube that starts with a Base Tube feature."); return; }
-            var lastId = path.FeatureIds.Last();
-            var body = TubeFeatureStore.BodyOf(TubeFeatureStore.FindById(all, lastId).Feature);
+            var body = TubeFeatureStore.TubeBody(all, path);
             if (body == null) { SwUtil.Message(App, "The tube body was not found."); return; }
             m.ClearSelection2(true);
             var data = new TubeFeatureData { Kind = TubeFeatureKind.FlatPattern, ParentId = path.RootId };
             if (TubeFeatureStore.Insert(m, data, body, "Tube Flat Pattern") == null)
                 SwUtil.Message(App, "SOLIDWORKS could not create the Tube Flat Pattern feature.", swMessageBoxIcon_e.swMbStop);
+            else UnbendPage.ShowReport(App, m, data.Id, "Flat Pattern");
         });
 
         public void OnExport() => Run("Export", m => ExportForm.ShowFor(App, m));
@@ -280,11 +310,12 @@ namespace TubeWorks.AddIn
         public void OnManufacturingCheck() => Run("Manufacturing Check", m =>
         {
             var chain = TubeFeatureStore.Solve(m);
-            var lib = TubeLibrary.Load();
+            var lib = LibraryStore.Load();
             var issues = new List<ValidationIssue>();
             foreach (var p in chain.Paths.Select(x => x.Profile).Distinct())
                 issues.AddRange(TubeValidator.Validate(chain, lib.RulesFor(p)));
             if (chain.Paths.Count == 0) issues.AddRange(TubeValidator.Validate(chain, new ManufacturingRules()));
+            issues.AddRange(CutsInBends(m, chain));
             issues = issues.GroupBy(i => i.Message).Select(g => g.First()).ToList();
             if (issues.Count == 0) { SwUtil.Message(App, "Manufacturing check: no errors and no warnings.\n(Checks that need limits use the tube library; undefined limits are not checked.)"); return; }
             var errors = issues.Where(i => i.Severity == IssueSeverity.Error).ToList();
@@ -294,17 +325,48 @@ namespace TubeWorks.AddIn
             SwUtil.Message(App, text, errors.Count > 0 ? swMessageBoxIcon_e.swMbStop : swMessageBoxIcon_e.swMbWarning);
         });
 
+        /// <summary>Cuts (holes, slots, notches) that lie in a bend region: they distort in bending and cannot be unbent exactly.</summary>
+        private IEnumerable<ValidationIssue> CutsInBends(IModelDoc2 m, ChainResult chain)
+        {
+            var list = new List<ValidationIssue>();
+            try
+            {
+                var all = TubeFeatureStore.Scan(m);
+                if (Features.StateFeatureBase.ActiveUnbends(all).Any() || all.Any(x => x.Data.Kind == TubeFeatureKind.FlatPattern && !x.Suppressed)) return list;
+                var builder = new BodyBuilder(App) { VerifyGeometry = false };
+                foreach (var path in chain.Paths.Where(p => p.RootIsBaseTube))
+                {
+                    var actual = TubeFeatureStore.TubeBody(all, path);
+                    var nominal = builder.Build(path.Primitives, path.Profile, out string _);
+                    if (actual == null || nominal == null) continue;
+                    var u = TubeUnbender.ForFeature(path, null);
+                    foreach (var p in MaterialTransfer.Removed(nominal, actual, out bool _))
+                        if (TubeUnbender.ClassifyRigid(u, p.Samples) < 0)
+                            list.Add(new ValidationIssue
+                            {
+                                Severity = IssueSeverity.Warning, Code = "CUT_IN_BEND", FeatureId = path.RootId,
+                                Message = "Feature in a bend region, distorts in bending and is not unbent exactly: " +
+                                          MaterialTransfer.Describe(path.Primitives, p, id => all.FirstOrDefault(x => x.Data.Id == id)?.Feature.Name ?? id),
+                            });
+                }
+            }
+            catch (Exception ex) { Log.Error("CutsInBends", ex); }
+            return list;
+        }
+
         /// <summary>Open the PropertyManager page of a TubeWorks feature for editing (also used by ISwComFeature.Edit).</summary>
         internal void EditFeature(IModelDoc2 model, IFeature feature)
         {
             var md = (IMacroFeatureData)feature.GetDefinition();
             var data = TubeFeatureStore.Read(md);
             if (data.Kind == TubeFeatureKind.FlatPattern) { SwUtil.Message(App, "The Tube Flat Pattern has no parameters. Use Flatten Tube to switch states."); return; }
+            if (data.Kind == TubeFeatureKind.Rebend) { SwUtil.Message(App, "Tube Rebend has no parameters. Edit its Unbend feature."); return; }
             if (!md.AccessSelections(model, null)) { SwUtil.Message(App, "SOLIDWORKS could not open the feature for editing.", swMessageBoxIcon_e.swMbStop); return; }
             switch (data.Kind)
             {
                 case TubeFeatureKind.BaseTube: BaseTubePage.Edit(App, model, feature, md, data); break;
                 case TubeFeatureKind.Straight: StraightPage.Edit(App, model, feature, md, data); break;
+                case TubeFeatureKind.Unbend: UnbendPage.Edit(App, model, feature, md, data); break;
                 default: FaceBendPage.Edit(App, model, feature, md, data); break;
             }
         }

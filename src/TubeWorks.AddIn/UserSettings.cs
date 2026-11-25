@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Xml.Serialization;
 using TubeWorks.Geometry;
@@ -54,54 +53,29 @@ namespace TubeWorks.AddIn
         }
     }
 
-    /// <summary>One tube preset of the library: profile, material and optional manufacturing limits (metres).</summary>
-    public sealed class TubePreset
+    /// <summary>Reads and writes the tube library file %APPDATA%\TubeWorks\library.xml.</summary>
+    internal static class LibraryStore
     {
-        public string Name { get; set; } = "";
-        public string Material { get; set; } = "";
-        public double OuterDiameter { get; set; }
-        public double WallThickness { get; set; }
-        /// <summary>Optional: available centreline radii of the tooling.</summary>
-        public List<double> BendRadii { get; set; } = new List<double>();
-        public double? MinBendRadius { get; set; }
-        public double? MinStraightBetweenBends { get; set; }
-        public double? MinClampLength { get; set; }
-        public string Machine { get; set; } = "";
-        public string Tooling { get; set; } = "";
-    }
-
-    /// <summary>
-    /// Tube library. Release 1 reads presets from %APPDATA%\TubeWorks\library.xml (see docs/library-example.xml).
-    /// The library editor is planned for Phase 2. No limits are built in: a check runs only when its limit is defined.
-    /// </summary>
-    public sealed class TubeLibrary
-    {
-        public List<TubePreset> Presets { get; set; } = new List<TubePreset>();
-
-        private static string FilePath => Path.Combine(UserSettings.Folder, "library.xml");
+        public static string FilePath => Path.Combine(UserSettings.Folder, "library.xml");
 
         public static TubeLibrary Load()
         {
             try
             {
                 if (File.Exists(FilePath))
-                    using (var s = File.OpenRead(FilePath))
-                        return (TubeLibrary)new XmlSerializer(typeof(TubeLibrary)).Deserialize(s);
+                    using (var s = File.OpenRead(FilePath)) return TubeLibrary.ReadXml(s);
             }
             catch (Exception ex) { Log.Error("Load library", ex); }
             return new TubeLibrary();
         }
 
-        /// <summary>Preset with the same profile (within 1 µm), or null.</summary>
-        public TubePreset Match(TubeProfile p) =>
-            Presets.Find(x => Math.Abs(x.OuterDiameter - p.OuterDiameter) < 1e-6 && Math.Abs(x.WallThickness - p.WallThickness) < 1e-6);
-
-        public ManufacturingRules RulesFor(TubeProfile p)
+        public static void Save(TubeLibrary lib)
         {
-            var m = Match(p);
-            var r = new ManufacturingRules();
-            if (m != null) { r.MinBendRadius = m.MinBendRadius; r.MinStraightBetweenBends = m.MinStraightBetweenBends; r.MinClampLength = m.MinClampLength; }
-            return r;
+            Directory.CreateDirectory(UserSettings.Folder);
+            string tmp = FilePath + ".tmp";
+            using (var s = File.Create(tmp)) lib.WriteXml(s);
+            if (File.Exists(FilePath)) File.Replace(tmp, FilePath, FilePath + ".bak");
+            else File.Move(tmp, FilePath);
         }
     }
 

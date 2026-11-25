@@ -13,6 +13,9 @@
       <Material>AISI 304</Material>
       <OuterDiameter>0.0254</OuterDiameter>
       <WallThickness>0.00165</WallThickness>
+      <StockLengths>
+        <double>6</double>
+      </StockLengths>
       <BendRadii>
         <double>0.0381</double>
         <double>0.0508</double>
@@ -20,6 +23,7 @@
       <MinBendRadius>0.0381</MinBendRadius>
       <MinStraightBetweenBends>0.03</MinStraightBetweenBends>
       <MinClampLength>0.05</MinClampLength>
+      <MaxBendAngleDeg>180</MaxBendAngleDeg>
       <Machine>EXAMPLE machine</Machine>
       <Tooling>EXAMPLE die set</Tooling>
     </TubePreset>

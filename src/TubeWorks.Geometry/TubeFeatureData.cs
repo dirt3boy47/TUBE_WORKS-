@@ -11,6 +11,10 @@ namespace TubeWorks.Geometry
         Straight = 1,
         Bend = 2,
         FlatPattern = 3,
+        /// <summary>Straightens selected bends (Phase 2).</summary>
+        Unbend = 4,
+        /// <summary>Restores the bends of an Unbend feature and transfers cuts made in the straightened state (Phase 2).</summary>
+        Rebend = 5,
     }
 
     /// <summary>Which end of the parent feature this feature continues from.</summary>
@@ -75,6 +79,17 @@ namespace TubeWorks.Geometry
         // ----- Options -----
         public bool Merge { get; set; } = true;
 
+        // ----- Unbend -----
+        /// <summary>Ids of the bend features to straighten. Empty = all bends.</summary>
+        public List<string> BendIds { get; set; } = new List<string>();
+        /// <summary>Feature that owns the fixed (unmoved) segment; empty = the first segment of the tube.</summary>
+        public string FixedFeatureId { get; set; } = "";
+        /// <summary>Index of the fixed segment inside that feature's primitives.</summary>
+        public int FixedPrimitive { get; set; }
+
+        /// <summary>Kinds that do not add a tube segment.</summary>
+        public bool IsStateFeature => Kind == TubeFeatureKind.FlatPattern || Kind == TubeFeatureKind.Unbend || Kind == TubeFeatureKind.Rebend;
+
         public bool IsRoot => string.IsNullOrEmpty(ParentId);
 
         public TubeProfile GetProfile() => TubeProfile.FromOdWall(OuterDiameter, WallThickness);
@@ -96,6 +111,7 @@ namespace TubeWorks.Geometry
                 KvV("upt", UpToPoint), KvV("upn", UpToPlaneNormal),
                 Kv("r", BendRadius), Kv("ang", BendAngle), Kv("rot", PlaneRotation), Kv("rev", ReverseDirection ? 1 : 0),
                 Kv("after", StraightAfter), Kv("merge", Merge ? 1 : 0),
+                Kv("bends", string.Join(",", BendIds)), Kv("fix", FixedFeatureId), Kv("fixi", FixedPrimitive),
             };
             var sb = new StringBuilder();
             foreach (var kv in d)
@@ -134,6 +150,9 @@ namespace TubeWorks.Geometry
             f.ReverseDirection = GetInt(map, "rev", 0) != 0;
             f.StraightAfter = GetD(map, "after");
             f.Merge = GetInt(map, "merge", 1) != 0;
+            f.BendIds = new List<string>(Get(map, "bends", "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
+            f.FixedFeatureId = Get(map, "fix", "");
+            f.FixedPrimitive = GetInt(map, "fixi", 0);
             return f;
         }
 

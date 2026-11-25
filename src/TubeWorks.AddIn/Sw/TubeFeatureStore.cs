@@ -15,12 +15,15 @@ namespace TubeWorks.AddIn.Sw
         public const string Straight = "TubeWorks.StraightFeature";
         public const string Bend = "TubeWorks.FaceBendFeature";
         public const string FlatPattern = "TubeWorks.FlatPatternFeature";
+        public const string Unbend = "TubeWorks.UnbendFeature";
+        public const string Rebend = "TubeWorks.RebendFeature";
 
         public static string For(TubeFeatureKind k) =>
-            k == TubeFeatureKind.BaseTube ? BaseTube : k == TubeFeatureKind.Straight ? Straight : k == TubeFeatureKind.Bend ? Bend : FlatPattern;
+            k == TubeFeatureKind.BaseTube ? BaseTube : k == TubeFeatureKind.Straight ? Straight : k == TubeFeatureKind.Bend ? Bend
+            : k == TubeFeatureKind.Unbend ? Unbend : k == TubeFeatureKind.Rebend ? Rebend : FlatPattern;
 
         public static bool IsOurs(string progId) =>
-            progId == BaseTube || progId == Straight || progId == Bend || progId == FlatPattern;
+            progId == BaseTube || progId == Straight || progId == Bend || progId == FlatPattern || progId == Unbend || progId == Rebend;
     }
 
     internal sealed class StoredFeature
@@ -87,7 +90,8 @@ namespace TubeWorks.AddIn.Sw
         /// <summary>Base name and running number: "Bend 01", "Straight 02".</summary>
         public static string NextName(IModelDoc2 model, TubeFeatureKind kind)
         {
-            string stem = kind == TubeFeatureKind.BaseTube ? "Base Tube" : kind == TubeFeatureKind.Straight ? "Straight" : kind == TubeFeatureKind.Bend ? "Bend" : "Tube Flat Pattern";
+            string stem = kind == TubeFeatureKind.BaseTube ? "Base Tube" : kind == TubeFeatureKind.Straight ? "Straight" : kind == TubeFeatureKind.Bend ? "Bend"
+                : kind == TubeFeatureKind.Unbend ? "Tube Unbend" : kind == TubeFeatureKind.Rebend ? "Tube Rebend" : "Tube Flat Pattern";
             if (kind == TubeFeatureKind.FlatPattern) return stem;
             var names = new HashSet<string>(Scan(model).Select(s => s.Feature.Name), StringComparer.OrdinalIgnoreCase);
             if (kind == TubeFeatureKind.BaseTube && !names.Contains(stem)) return stem;
@@ -149,6 +153,27 @@ namespace TubeWorks.AddIn.Sw
                 return faces.Length > 0 ? faces[0].GetBody() as IBody2 : null;
             }
             catch { return null; }
+        }
+
+        /// <summary>
+        /// The current body of a tube: the body of the last feature (segment, Unbend, Rebend) of that tube that still owns faces.
+        /// After an Unbend/Rebend the segment features own no faces any more, so they are skipped.
+        /// </summary>
+        public static IBody2 TubeBody(IReadOnlyList<StoredFeature> all, TubePath path)
+        {
+            var ids = new HashSet<string>(path.FeatureIds);
+            var state = new HashSet<string>();
+            foreach (var s in all)
+                if ((s.Data.Kind == TubeFeatureKind.Unbend && s.Data.ParentId == path.RootId) || (s.Data.Kind == TubeFeatureKind.Rebend && state.Contains(s.Data.ParentId)))
+                    state.Add(s.Data.Id);
+            for (int i = all.Count - 1; i >= 0; i--)
+            {
+                var s = all[i];
+                if (s.Suppressed || !(ids.Contains(s.Data.Id) || state.Contains(s.Data.Id))) continue;
+                var b = BodyOf(s.Feature);
+                if (b != null) return b;
+            }
+            return null;
         }
 
         /// <summary>Suppress the flat pattern (return to the bent state). Returns true when it was unsuppressed before.</summary>

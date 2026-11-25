@@ -179,8 +179,8 @@ namespace TubeWorks.AddIn.Ui
                         _model.ForceRebuild3(false);
                     }
                     int errors = 0, warnings = 0;
-                    bool ok = _model.Extension.SaveAs3(d.FileName, (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
-                        (int)(swSaveAsOptions_e.swSaveAsOptions_Silent | swSaveAsOptions_e.swSaveAsOptions_Copy), null, null, ref errors, ref warnings);
+                    bool ok = _model.Extension.SaveAs(d.FileName, (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
+                        (int)(swSaveAsOptions_e.swSaveAsOptions_Silent | swSaveAsOptions_e.swSaveAsOptions_Copy), null, ref errors, ref warnings);
                     MessageBox.Show(this, ok ? $"Exported at 1:1 (model units) to {d.FileName}." : $"SOLIDWORKS export failed (error {errors}, warning {warnings}).", Text);
                 }
                 finally

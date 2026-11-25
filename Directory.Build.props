@@ -1,0 +1,9 @@
+<Project>
+  <!-- One version number for every assembly and the installer. -->
+  <PropertyGroup>
+    <TubeWorksVersion>0.2.0</TubeWorksVersion>
+    <Version>$(TubeWorksVersion)</Version>
+    <Company>TubeWorks</Company>
+    <Product>TubeWorks Designer</Product>
+  </PropertyGroup>
+</Project>

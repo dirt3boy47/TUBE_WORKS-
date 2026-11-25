@@ -277,7 +277,7 @@ namespace TubeWorks.AddIn.Pmp
                 var t = Start.Value.Tangent;
                 _axis.Caption = $"Tube axis: ({t.X:0.###}, {t.Y:0.###}, {t.Z:0.###})";
                 _attach.Caption = AttachText;
-                var preset = TubeLibrary.Load().Match(Profile);
+                var preset = LibraryStore.Load().Match(Profile);
                 _minR.Caption = "Minimum recommended radius: " + (preset?.MinBendRadius != null ? SwUtil.FormatLength(Model, preset.MinBendRadius.Value) : "not defined in the tube library");
             }
             UpdatePreview(UserSettings.Current.LivePreview, UserSettings.Current.ShowCentreline);

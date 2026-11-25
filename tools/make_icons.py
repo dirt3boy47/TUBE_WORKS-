@@ -22,8 +22,8 @@ RED = (200, 40, 40, 255)
 
 # Order must match TubeWorksAddIn.Commands.
 COMMANDS = ["base", "bend", "straight", "edit", "reverse", "multi", "plane", "trim", "notch",
-            "unbend", "rebend", "flatten", "unwrap", "export", "table", "props", "check"]
-PLANNED = {"multi", "trim", "notch", "unbend", "rebend", "unwrap"}
+            "unbend", "rebend", "flatten", "unwrap", "export", "table", "props", "check", "library"]
+PLANNED = {"multi", "trim", "notch"}
 
 
 def tube(d, x0, y0, x1, y1, w, c):
@@ -87,6 +87,10 @@ def draw(name):
         arc(d, 84, 92, 16, 180, 270, 8, c)
     elif name == "props":
         d.ellipse([20, 20, 108, 108], outline=c, width=14); d.ellipse([46, 46, 82, 82], outline=c, width=8)
+    elif name == "library":
+        for i, x in enumerate((18, 46, 74)):
+            d.rectangle([x, 20, x + 22, 110], outline=DARK, width=6)
+        d.line([(100, 24), (118, 108)], fill=c, width=14)
     elif name == "check":
         tube(d, 14, 90, 70, 90, W, c); d.line([(60, 60), (80, 84), (118, 26)], fill=(40, 160, 60, 255), width=12)
     return img
@@ -102,7 +106,7 @@ def main():
         strip.save(os.path.join(OUT, f"toolbar_{size}.png"))
         draw("bend").resize((size, size), Image.LANCZOS).save(os.path.join(OUT, f"main_{size}.png"))
 
-    for kind, src in (("basetube", "base"), ("straight", "straight"), ("bend", "bend"), ("flatpattern", "flatten")):
+    for kind, src in (("basetube", "base"), ("straight", "straight"), ("bend", "bend"), ("flatpattern", "flatten"), ("unbend", "unbend"), ("rebend", "rebend")):
         ic = draw(src)
         for state, tint in (("", None), ("_suppressed", (160, 160, 160)), ("_highlighted", (255, 255, 255))):
             canvas = Image.new("RGB", (16, 18), (255, 255, 255))

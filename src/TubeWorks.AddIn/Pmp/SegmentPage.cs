@@ -221,7 +221,7 @@ namespace TubeWorks.AddIn.Pmp
         {
             var chain = SolveWithCurrent();
             var path = chain.Paths.FirstOrDefault(p => p.FeatureIds.Contains(Data.Id));
-            var issues = TubeValidator.Validate(chain, TubeLibrary.Load().RulesFor(Profile))
+            var issues = TubeValidator.Validate(chain, LibraryStore.Load().RulesFor(Profile))
                 .Where(i => i.FeatureId == Data.Id || (path != null && i.FeatureId == path.RootId && i.Code == "CLAMP")).ToList();
             warnings = issues.Count == 0 ? "No manufacturing warnings." : string.Join("\n", issues.Select(i => i.ToString()));
             return path == null ? "Total developed length: (tube has an error)" : "Total developed length: " + SwUtil.FormatLength(Model, path.DevelopedLength);

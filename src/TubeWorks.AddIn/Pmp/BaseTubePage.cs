@@ -19,7 +19,7 @@ namespace TubeWorks.AddIn.Pmp
         private readonly IMacroFeatureData _editDef;
         private readonly Preview _preview;
         private readonly BodyBuilder _builder;
-        private readonly TubeLibrary _library = TubeLibrary.Load();
+        private readonly TubeLibrary _library = LibraryStore.Load();
 
         private IPropertyManagerPageNumberbox _od, _wall, _id, _len, _x, _y, _z;
         private IPropertyManagerPageCombobox _sizeMode, _axis, _preset;

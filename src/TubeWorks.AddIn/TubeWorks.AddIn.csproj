@@ -12,8 +12,6 @@
     <AssemblyName>TubeWorks.AddIn</AssemblyName>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <ComVisible>false</ComVisible>
-    <Version>0.1.0</Version>
-    <Product>TubeWorks Designer</Product>
     <Description>Parametric tube design add-in for SOLIDWORKS</Description>
     <SwInteropDir Condition="'$(SwInteropDir)' == ''">$(ProgramW6432)\SOLIDWORKS Corp\SOLIDWORKS\api\redist</SwInteropDir>
   </PropertyGroup>

@@ -1,14 +1,15 @@
 # TubeWorks Designer — technical design
 
-Release 0.1.0 (Phase 1 MVP). This document contains the 8 deliverables that the specification asks for before the full application.
+Release 0.2.0 (Phase 1 and the first part of Phase 2). This document contains the 8 deliverables that the specification asks for before the full application.
 
 **Verification status, stated once for the whole document:**
 
 | What | Status |
 |---|---|
-| Geometry engine (`TubeWorks.Geometry`) | 24 automated tests pass. Expected values come from closed-form hand calculations. |
+| Geometry engine (`TubeWorks.Geometry`) | 36 automated tests pass. Expected values come from closed-form hand calculations. The DXF output is also checked independently with ezdxf. |
 | Add-in compile against SOLIDWORKS 2026 interop (34.1.1.11) | Compiles: 0 errors, 0 warnings. So every API member that the add-in uses exists with the signature that it uses. |
-| Add-in compile against SOLIDWORKS 2016 interop (24.4) | Fails: only `IBody2.Copy2` and `IModelDocExtension.SaveAs3` are missing. |
+| Add-in compile against SOLIDWORKS 2016 interop (24.4) | Compiles: 0 errors, 0 warnings (since 0.2.0 the add-in uses `IBody2.Copy` and `SaveAs`). The setup program is built from this. |
+| Setup program (`TubeWorksSetup-0.2.0.exe`, NSIS) | Built; contents checked (42 files, no interop assemblies). Not run on Windows. |
 | Add-in running inside SOLIDWORKS | **Not tested.** The code was written on Linux, where SOLIDWORKS cannot run. Run the manual test plan (`TEST-PLAN.md`) before production use. |
 | API semantics (argument layouts, orientation conventions) | The help pages could not be read from the build environment. Where an assumption was necessary, the add-in checks the result at run time (see §8). |
 
@@ -33,7 +34,8 @@ SOLIDWORKS (sldworks.exe, x64)
                     ▼  (no SOLIDWORKS dependency)
           TubeWorks.Geometry.dll (.NET Standard 2.0)
             Vec3, TubeFrame, TubeProfile, PathPrimitive (Straight/Arc), TubeFeatureData (+codec),
-            BendMath, BendSolver, TubeChainSolver, BendTable (CSV/XYZ/LRA), TubeValidator
+            BendMath, BendSolver, TubeChainSolver, BendTable (CSV/XYZ/LRA), TubeValidator,
+            RigidTransform, TubeUnbender, SurfaceUnwrapper, DxfWriter, TubeLibrary (CSV/XML)
 ```
 
 Design rules:
@@ -63,8 +65,11 @@ All members below exist in the 2026 interop (proved by compiling). "Assumption c
 | Bend table, CSV, XYZ, LRA | engine + WinForms | Pure code | Implemented |
 | Custom properties | `ICustomPropertyManager.Add3` | Standard | Implemented |
 | Material | `IPartDoc.SetMaterialPropertyName2` | Standard | Implemented (part material) |
-| Unbend/Rebend single bends, feature transfer | macro feature that rebuilds the chain with selected angles = 0 and maps cut bodies | Feasible, complex | Planned Phase 2 |
-| 2D surface unwrap, DXF/DWG with layers | `IModeler` + sketch creation or a DXF writer | Feasible | Planned Phase 2 |
+| Unbend/Rebend single bends, feature transfer | Unbend/Rebend macro features; cut material = nominal − actual body (`Operations2`); rigid motion with `IBody2.ApplyTransform` (`IMathUtility.CreateTransform`, layout checked with a test point) | Feasible | **Implemented 0.2** (exact for cuts in straight segments; cuts in bends reported, not moved) |
+| 2D surface unwrap, DXF with layers | in-memory straightened body; loops of the cylindrical face (`IFace2.GetLoops`, `IEdge.GetCurveParams3`, `ICurve.Evaluate2`); engine maps and writes DXF R12 | Feasible | **Implemented 0.2** |
+| DWG | needs a licensed DWG library (for example ODA) or a SOLIDWORKS drawing export | Feasible with a licence | Not planned without a library decision |
+| Library editor, import/export | WinForms; engine CSV/XML codec | Pure code | **Implemented 0.2** |
+| Installer | NSIS setup program; RegAsm /codebase; Apps entry; silent mode | Standard | **Implemented 0.2** |
 | Drawings (views, bend table, sizes A4–A1) | `ISldWorks.NewDocument`, `IDrawingDoc.CreateDrawViewFromModelView3`, tables | Feasible | Planned Phase 2 |
 | Square / rectangular / elliptical tube | engine `ProfileShape` enum reserved; body builder needs a profile sweep | Feasible | Planned |
 | Associative display dimensions on features | macro feature dimensions (`DimTypes`/`DimValues`) | Feasible, needs testing in SOLIDWORKS | Planned |
@@ -141,7 +146,8 @@ The start tangent is never changed, so every bend is tangent-continuous by const
 |---|---|---|
 | 1 (MVP) | Base Tube; existing-tube face recognition; Face Bend (radius/angle, plane rotation, reverse, straight after); XYZ end-point and direction solving with conflict handling; plane/axis alignment; Straight Extension (blind, up to point, up to plane); sequential bends; parametric editing and reference recovery; Flatten Tube (straight blank); STEP/Parasolid/SLDPRT export; bend table (CSV, XYZ, LRA); Tube Properties; basic Manufacturing Check | **Implemented in this repository, compile-verified, not yet tested in SOLIDWORKS** |
 | 1b | Run `TEST-PLAN.md` in SOLIDWORKS; fix runtime issues; macro feature display dimensions; Multi Bend | Next |
-| 2 | Individual unbend/rebend with feature transfer; hole and cut-out mapping; Unwrap Tube Surface; DXF/DWG with layers; drawings; library editor with import/export; full validation | Planned |
+| 2a | Individual unbend/rebend with transfer of cuts; hole and cut-out mapping; Unwrap Tube Surface; DXF with layers; library editor with import/export; validation of cuts in bends; setup program | **Implemented in 0.2.0, compile-verified, not yet tested in SOLIDWORKS** |
+| 2b | Automatic drawings (views, bend table, A4–A1 templates); engraving detection; DWG decision; mapping of cuts inside bends (approximate, flagged) | Next |
 | 3 | Machine postprocessors; springback and stretch compensation from calibration data; stock optimisation; nesting; cost; batch; reports | Planned |
 
 ## 8. Technical risks and limitations
@@ -159,13 +165,39 @@ The start tangent is never changed, so every bend is tangent-continuous by const
 4. *Foreign-root anchor after reopening:* a feature that starts on a non-TubeWorks tube measures that face on each rebuild. If a downstream feature rebuilds alone directly after the file is opened, it uses the anchor stored at the last edit. Ctrl+Q (forced rebuild) always gives the live value.
 5. *Performance:* each feature re-reads the tree on rebuild (linear in the number of features). Expected to be fine for tubes with tens of bends; not measured.
 
-**Limitations of release 0.1 (by design):**
+6. *Rebend needs Unbend data from this session:* cuts that were in bends before an Unbend are kept in memory by the Unbend feature. After reopening a file, rebuild all (Ctrl+Q) before a Rebend rebuilds on its own; otherwise the Rebend reports an error instead of losing those cuts.
+7. *Boolean comparison of nominal and actual bodies:* cut detection subtracts bodies with coincident faces. Slivers below 0.01 mm³ are ignored. If the modeler gives noise above that, false "cuts" appear in the reports (test UB-1).
+8. *Older-API build on newer SOLIDWORKS:* the setup program's add-in references the 2016 interop assemblies; loading in newer versions depends on SOLIDWORKS resolving them (test INS-1). Fallback: build against your own installation.
+9. *Unsigned setup program:* SmartScreen warns until it is signed with your certificate.
+
+**Limitations of release 0.2 (by design):**
 
 - Circular hollow tube only. Square, rectangular and elliptical are reserved in the engine.
 - Base Tube placement, reference alignment and "up to" targets are captured values, not associative links.
 - Flat pattern needs a tube that starts with a Base Tube. Tubes that start on a foreign body show their TubeWorks part in the bend table with a note.
 - Developed length is nominal centreline; no compensation.
 - One tube per Flatten Tube command (the first path that starts with a Base Tube).
-- Bend markings on the blank, hole mapping, DXF, drawings: Phase 2.
+- Cuts in bend regions are not transferred by Unbend/Flatten/Unwrap (reported). Drawings: Phase 2b.
 - Labels show values in mm, cm, m, in or ft according to the document; number boxes use the document units natively.
-- Minimum SOLIDWORKS version not determined. Compile-checked against 2026; the 2016 interop lacks two members used.
+- Minimum SOLIDWORKS version not determined at run time. Compiles against the 2016 and 2026 APIs.
+
+## Phase 2 design notes (release 0.2)
+
+**Unbend.** For a path and a set of bends to straighten, with one fixed primitive, `TubeUnbender` walks away from the fixed primitive
+in both directions. Crossing a straightened bend (forward) applies the rigid motion *rotate by −θ about the bend axis through the arc
+end, then translate the end to start + T0·Rθ* (backward: the mirror motion). Every primitive gets the composed motion `BentToUnbent`;
+a straightened arc becomes a straight of length R·θ. Tests check continuity, collinearity, total length and that the fixed segment does not move.
+
+**Cut transfer.** cut material = nominal body − actual body. A piece is classified with its vertices and box corners: when all of them
+lie in primitives that share one rigid motion (and none in a straightened bend), the piece is moved by that motion and subtracted from the
+nominal unbent body. Rebend does the inverse with the inverse motion, and re-applies the bent-state cuts in bends that the Unbend kept back.
+The result is exact for transferred pieces because the motion is rigid.
+
+**Unwrap.** The straightened body's cylindrical face at the reference radius is developed with x = axial position, y = r_ref·angle
+(angle from the seam). This is an isometry of the cylinder, so it is exact. Loops are made continuous in angle and split at multiples of 2π
+(seam crossing). Loops that go once around the tube are end profiles: plain circles at the ends become straight end lines; circles inside
+the length (face boundaries of collinear segments) are ignored; notched ends become profile polylines. Bend start, finish and centre
+lines, an "inside of bend" mark at the bend direction angle, and a label (number, angle, radius, rotation) are added.
+
+**DXF.** ASCII R12 (AC1009), LTYPE and LAYER tables, LINE/POLYLINE/TEXT, coordinates in mm (or inch) at 1:1. Layer names and
+colours are configurable.

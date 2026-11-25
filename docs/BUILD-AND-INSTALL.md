@@ -1,5 +1,33 @@
 # Build and install
 
+## Install with the setup program (recommended)
+
+1. Close SOLIDWORKS.
+2. Run `TubeWorksSetup-0.2.0.exe`. Windows asks for administrator rights.
+   The setup program is not code-signed, so Windows SmartScreen can show "Windows protected your PC": click **More info > Run anyway**
+   only if you got the file from your own build or CI. (Signing needs your organisation's code-signing certificate.)
+3. The setup program checks 64-bit Windows, .NET Framework 4.8 and that SOLIDWORKS is closed; copies the files to
+   `C:\Program Files\TubeWorks Designer`; registers the add-in (`RegAsm /codebase`); and adds **TubeWorks Designer** to
+   *Settings > Apps* with an uninstaller and Start-menu entries (Documentation, Uninstall).
+4. Start SOLIDWORKS and open a part: the **Tube Design** tab appears. If not: **Tools > Add-Ins**, tick TubeWorks Designer.
+
+Silent install / uninstall (for IT deployment): `TubeWorksSetup-0.2.0.exe /S`, `"C:\Program Files\TubeWorks Designer\Uninstall.exe" /S`.
+
+**SOLIDWORKS version.** The setup program contains an add-in compiled against the SOLIDWORKS **2016** API (the oldest API level
+that has every call used). It relies on newer SOLIDWORKS versions loading add-ins built for an older API. This is common practice but
+**not yet verified for TubeWorks** (test IN-1). If the add-in does not load, build the setup program against your own installation
+with `installer\build-installer.ps1` (next section).
+
+## Build the setup program
+
+- Linux / CI: `installer/build-installer.sh` (needs .NET SDK 8, NSIS, curl, unzip). Output: `installer/out/TubeWorksSetup-<version>.exe`.
+- Windows: install NSIS 3, then `powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1`. This compiles against
+  your SOLIDWORKS installation (`api\redist`).
+- The version number is in `Directory.Build.props` (`TubeWorksVersion`).
+- The GitHub workflow builds the setup program on every change under `tubeworks/` and attaches it as the artifact **TubeWorksSetup**.
+
+# Manual build and install (developers)
+
 ## Requirements
 
 - Windows 10/11 x64 with SOLIDWORKS installed (compile-checked against 2026; see DESIGN.md §8 for older versions).

@@ -1,4 +1,4 @@
-# User guide (release 0.1)
+# User guide (release 0.2)
 
 ## Basic workflow
 
@@ -14,12 +14,16 @@ Select face → Face Bend → drag or type → OK → (the new end face is selec
 | **Edit Bend** | Select a TubeWorks feature (tree or face) to edit it. Double-click / Edit Feature in the tree does the same. |
 | **Reverse Bend** | Bends the selected bend to the opposite side. |
 | **Set Bend Plane** | Opens the selected bend with the reference box active: select a plane or planar face (bend lies in that plane) or a straight edge or axis (tube end points along it). |
-| **Flatten Tube** | First use: creates **Tube Flat Pattern** at the end of the tree (straight blank of the developed length). Later uses: switch between bent and straight. New bends switch back to the bent state automatically. |
+| **Unbend** | Straightens one, several or all bends about a fixed straight segment that you choose. Each bend keeps its developed length (R × angle). Add holes, slots and cut-outs after it, then use Rebend. |
+| **Rebend** | Restores the bends of the active Unbend. Cuts made while straight go back to the bent tube. |
+| **Flatten Tube** | First use: creates **Tube Flat Pattern** at the end of the tree (straight blank of the developed length, with the cuts of the straight segments). Later uses: switch between bent and straight. New bends switch back to the bent state automatically. |
+| **Unwrap Tube Surface** | Develops the outside, inside or neutral surface of the straightened tube into a rectangle (width = π × reference diameter) and writes a 1:1 DXF (mm or inch) with layers for the outer profile, cut-outs, bend lines, centreline, engraving, construction and text. Choose the seam angle. The model is not changed. |
+| **Tube Library** | Edit presets (OD, wall, material, stock lengths, tooling radii, limits, calibration values). Import and export CSV or XML. |
 | **Export Flat Pattern** | Bent or straight tube to STEP, Parasolid or a SOLIDWORKS part copy (native translators, 1:1); centreline XYZ to CSV. |
 | **Bend Table** | Bend number, feed, CLR, angle, rotation, direction, start/finish XYZ, developed bend, cumulative length. Choose mm/in, rotation sign, bend/included angle. Export full CSV, XYZ or LRA. Write custom properties. |
 | **Tube Properties** | OD, ID, wall, material, number of bends, developed (required stock) length. |
 | **Manufacturing Check** | Errors and warnings (see below). |
-| Multi Bend, Tube Trim, Tube Notch, Unbend, Rebend, Unwrap Tube Surface | **Not available in this release** (shown disabled). |
+| Multi Bend, Tube Trim, Tube Notch | **Not available in this release** (shown disabled). |
 
 ## Face Bend input modes
 
@@ -36,6 +40,21 @@ Select face → Face Bend → drag or type → OK → (the new end face is selec
 - *Total developed length* = Σ straights + Σ developed bends, nominal centreline. No stretch or springback compensation is applied.
 - *Minimum recommended radius* and other limits come only from `%APPDATA%\TubeWorks\library.xml`. If no limit is defined, the add-in says "not defined" and does not check it.
 - Errors: CLR not greater than OD/2, self-intersection (sampled), geometry errors. Warnings: radius below minimum, angle above the machine limit (180° unless changed), no or short straight between bends, clamping length.
+
+## How cuts are transferred (Unbend, Rebend, Flatten, Unwrap)
+
+TubeWorks compares the actual tube with the nominal tube made from the feature parameters. The difference is the cut material.
+
+- A cut that lies completely in one straight segment (or in parts that do not move relative to each other) is moved with the exact
+  rigid motion of that segment. The transfer is **exact**.
+- A cut that touches a bend, or spans a bend, has no exact rigid motion. TubeWorks **does not move it** and lists it in a report
+  (position along the tube and the bend). Rebend restores such cuts unchanged if they were made in the bent state.
+- Material added to the tube (bosses, welds) is not transferred and is reported.
+- The unwrapped surface is exact for cuts that were transferred exactly (a cylinder is developable). The neutral-surface option places
+  outlines of the outside surface on the mean diameter by angle; this is exact for radial cuts only and is reported as approximate.
+- Engraving: the ENGRAVING layer exists in the DXF but is not filled yet; all cut outlines go to INTERNAL_CUTOUTS.
+
+After Ctrl+Q or reopening, run Ctrl+Q once before you edit a Rebend, so that the Unbend data is available.
 
 ## Editing upstream and recovering references
 

@@ -69,7 +69,7 @@ namespace TubeWorks.Geometry
             foreach (var input in inputs)
             {
                 var d = input.Data;
-                if (d.Kind == TubeFeatureKind.FlatPattern) continue;
+                if (d.IsStateFeature) continue;
                 var fs = new FeatureSolution { Data = d, FeatureName = input.FeatureName, Suppressed = input.Suppressed };
                 result.Features.Add(fs);
                 if (byId.ContainsKey(d.Id)) { fs.Error = "Duplicate feature id. The feature was probably copied. Delete and create it again."; continue; }

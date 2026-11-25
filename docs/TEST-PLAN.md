@@ -2,7 +2,7 @@
 
 ## A. Automated (no SOLIDWORKS)
 
-`dotnet test tests/TubeWorks.Geometry.Tests` — 24 tests, all pass in the build environment. Expected values are closed-form hand calculations, not engine output.
+`dotnet test tests/TubeWorks.Geometry.Tests` — 36 tests, all pass in the build environment. Expected values are closed-form hand calculations, not engine output.
 
 | Acceptance case | Test |
 |---|---|
@@ -19,6 +19,12 @@
 | Persistence format | `Codec_RoundTrip_AndUnknownKeysIgnored` |
 | Validation | `Validator_SelfIntersection_Detected`, `Validator_TightButValidUBend_NotReported`, `Validator_UsesOnlyDefinedLimits` |
 | Bend table output | `BendTable_Csv_UsesInvariantCultureAndConventions` |
+| Unbend: straight blank of developed length | `UnbendAll_GivesStraightTubeOfDevelopedLength` |
+| Unbend one bend, rigid motion of straights | `UnbendOne_KeepsOtherBend_AndMovesStraightsRigidly`, `Unbend_FixedLastSegment_DoesNotMoveIt`, `RigidTransform_ComposeAndInverse` |
+| Hole and cut-out mapping | `HoleTransfer_RoundTripIsExact_ForStraightRegions_AndRefusedInBends` |
+| Surface development | `Unwrap_Width_AndExactMapping`, `Unwrap_HoleCrossingSeam_IsSplitIntoTwoPieces_AtBothEdges`, `Unwrap_EndCircle_IsRecognisedAsPlainEnd`, `Unwrap_InteriorFaceBoundaryCircle_IsIgnored_AndMergeCollinearJoinsStraights` |
+| 1:1 DXF pattern | `Dxf_IsWellFormed_AndUsesLayersAndMillimetres`; the file is also checked independently with ezdxf (`tools/check_dxf.py`): AC1009, 0 audit errors, extents 410.8997 × 78.5398 mm = developed length × π·OD |
+| Library | `Library_CsvAndXmlRoundTrip_AndChecks`, `Codec_UnbendFields` |
 
 Also automated: the add-in compiles against the SOLIDWORKS 2026 interop (CI workflow).
 
@@ -52,5 +58,15 @@ Use a new part in mm. Record pass/fail and the SOLIDWORKS version. On any failur
 | MC-1 | Manufacturing Check with library-example.xml installed and CLR 30 | Minimum radius warning |
 | MC-2 | Tube that crosses itself (bend 270° then long straight) | Self-intersection error |
 | NEG-1 | Face Bend on a solid bar, a square tube, a non-planar face | Clear refusal message, no feature |
+| INS-1 | Run TubeWorksSetup-0.2.0.exe on a PC with SOLIDWORKS (note the version); then Settings > Apps > Uninstall | Tab appears (this also proves the 2016-API build loads in your version); uninstall removes the tab, the files and the Apps entry |
+| UB-1 | Tube Base 100 + Bend 90° R50 + straight 100; Hole Wizard Ø6 hole through one wall in the last straight; Unbend all, fixed = Base Tube | Straight tube of 278.540 mm; hole at 228.540 mm from the start (100 + 78.540 + 50) when the hole was 50 mm into the last straight |
+| UB-2 | After UB-1 add an extruded cut slot in the straightened tube, then Rebend | Bent tube with the original hole and the new slot at the corresponding position on the last straight |
+| UB-3 | Hole in the bend region, then Unbend | Report lists the cut "in Bend 01 (bend region)"; after Rebend the hole is back unchanged |
+| UB-4 | Unbend only Bend 02 of a 3-bend tube, fixed = last straight | Bend 01 and Bend 03 unchanged in shape; last straight does not move |
+| FP-3 | Flatten with the hole of UB-1 | Blank shows the hole at the same developed position |
+| UW-1 | Unwrap, outside surface, seam 0°, mm; open the DXF in a DXF viewer | Rectangle 278.540 × 78.540 mm (OD 25); hole outline on INTERNAL_CUTOUTS; bend start/finish lines at 100 and 178.540 mm on BEND_LINES; label text |
+| UW-2 | Hole centred on the seam (choose the seam angle through the hole) | Hole outline split into two parts at the two long edges |
+| LIB-1 | Tube Library: add a preset, save, close, reopen; export CSV; import it into an empty library | Values identical; invalid wall (≥ OD/2) refused on save |
+| MC-3 | Manufacturing Check with a hole in a bend | Warning "Feature in a bend region …" |
 
-Not covered in release 0.1 (planned): tube with holes and notches through unbend/rebend; 1:1 DXF pattern.
+Not covered yet (planned): automatic drawings; DWG; engraving detection.
