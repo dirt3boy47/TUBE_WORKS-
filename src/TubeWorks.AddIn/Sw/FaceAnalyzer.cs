@@ -29,7 +29,7 @@ namespace TubeWorks.AddIn.Sw
             var surf = face.GetSurface() as ISurface;
             if (surf == null || !surf.IsPlane()) { error = "Select the flat end face of a tube."; return null; }
 
-            var edges = SwUtil.Arr<IEdge>(face.GetEdges());
+            var edges = SwUtil.Arr<IEdge>((object)face.GetEdges());
             var circles = edges.Select(e => e.GetCurve() as ICurve).ToList();
             if (circles.Count != 2 || circles.Any(c => c == null || !c.IsCircle()))
             {
@@ -41,8 +41,8 @@ namespace TubeWorks.AddIn.Sw
 
             // ICurve.CircleParams: centre (3), axis (3), radius (1). The centre and radius are checked below
             // against a point evaluated on the curve, so a wrong assumption fails safely.
-            var p0 = SwUtil.D(circles[0].CircleParams);
-            var p1 = SwUtil.D(circles[1].CircleParams);
+            var p0 = SwUtil.D((object)circles[0].CircleParams);
+            var p1 = SwUtil.D((object)circles[1].CircleParams);
             if (p0 == null || p1 == null || p0.Length < 7 || p1.Length < 7) { error = "Could not read the circle geometry of the end face."; return null; }
             Vec3 c0 = SwUtil.V(p0), c1 = SwUtil.V(p1);
             double r0 = p0[6], r1 = p1[6];
@@ -50,7 +50,7 @@ namespace TubeWorks.AddIn.Sw
             double tol = Math.Max(1e-7, 1e-6 * Math.Max(r0, r1));
             if (!c0.AlmostEquals(c1, tol)) { error = "The inside and outside circles of the end face are not concentric."; return null; }
 
-            var n = SwUtil.D(face.Normal);
+            var n = SwUtil.D((object)face.Normal);
             if (n == null) { error = "Could not read the face normal."; return null; }
             Vec3 normal = SwUtil.V(n).Normalized();
 
@@ -58,7 +58,7 @@ namespace TubeWorks.AddIn.Sw
             // face, so a point on the outer radius just behind the face lies on the wall, and one just in front does not.
             double ro = Math.Max(r0, r1);
             var outerEdge = r0 > r1 ? edges[0] : edges[1];
-            var wall = SwUtil.Arr<IFace2>(outerEdge.GetTwoAdjacentFaces2()).FirstOrDefault(f => !IsPlanar(f));
+            var wall = SwUtil.Arr<IFace2>((object)outerEdge.GetTwoAdjacentFaces2()).FirstOrDefault(f => !IsPlanar(f));
             if (wall != null)
             {
                 Vec3 radial = (Math.Abs(normal.X) < 0.9 ? Vec3.UnitX : Vec3.UnitY).Cross(normal).Normalized() * ro;
@@ -82,7 +82,7 @@ namespace TubeWorks.AddIn.Sw
 
         private static double DistanceToFace(IFace2 f, Vec3 p)
         {
-            var c = SwUtil.D(f.GetClosestPointOn(p.X, p.Y, p.Z));
+            var c = SwUtil.D((object)f.GetClosestPointOn(p.X, p.Y, p.Z));
             return c == null || c.Length < 3 ? double.MaxValue : SwUtil.V(c).DistanceTo(p);
         }
 
@@ -91,7 +91,7 @@ namespace TubeWorks.AddIn.Sw
             try
             {
                 if (!c.GetEndParams(out double t0, out double t1, out bool _, out bool _)) return true;
-                var e = SwUtil.D(c.Evaluate2((t0 + t1) / 2, 0));
+                var e = SwUtil.D((object)c.Evaluate2((t0 + t1) / 2, 0));
                 if (e == null || e.Length < 3) return true;
                 return Math.Abs(SwUtil.V(e).DistanceTo(centre) - radius) <= Math.Max(1e-7, radius * 1e-5);
             }

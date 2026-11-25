@@ -118,7 +118,7 @@ namespace TubeWorks.AddIn.Pmp
                 if (pManipulator is ITriadManipulator t)
                 {
                     var p = (newPosMathPt as IMathPoint) ?? (t.Origin as IMathPoint);
-                    var arr = SwUtil.D(p?.ArrayData);
+                    var arr = SwUtil.D((object)p?.ArrayData);
                     if (arr != null) TriadDragged?.Invoke(SwUtil.V(arr));
                 }
             }

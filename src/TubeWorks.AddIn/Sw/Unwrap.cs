@@ -48,14 +48,14 @@ namespace TubeWorks.AddIn.Sw
             var loops = new List<IReadOnlyList<Vec3>>();
             double chord = Math.Max(1e-6, prof.OuterDiameter / 400);
             int faces = 0;
-            foreach (var face in SwUtil.Arr<IFace2>(straight.GetFaces()))
+            foreach (var face in SwUtil.Arr<IFace2>((object)straight.GetFaces()))
             {
                 var surf = face.GetSurface() as ISurface;
                 if (surf == null || !surf.IsCylinder()) continue;
-                var cp = SwUtil.D(surf.CylinderParams); // origin (3), axis (3), radius
+                var cp = SwUtil.D((object)surf.CylinderParams); // origin (3), axis (3), radius
                 if (cp == null || cp.Length < 7 || Math.Abs(cp[6] - faceR) > Math.Max(1e-7, faceR * 1e-6)) continue;
                 faces++;
-                foreach (var loop in SwUtil.Arr<ILoop2>(face.GetLoops())) loops.Add(LoopPoints(loop, chord));
+                foreach (var loop in SwUtil.Arr<ILoop2>((object)face.GetLoops())) loops.Add(LoopPoints(loop, chord));
             }
             if (faces == 0) { error = "The " + (surface == UnwrapSurface.Inside ? "inside" : "outside") + " cylindrical face was not found."; return null; }
 
@@ -78,7 +78,7 @@ namespace TubeWorks.AddIn.Sw
         private static List<Vec3> LoopPoints(ILoop2 loop, double chord)
         {
             var chains = new List<List<Vec3>>();
-            foreach (var e in SwUtil.Arr<IEdge>(loop.GetEdges()))
+            foreach (var e in SwUtil.Arr<IEdge>((object)loop.GetEdges()))
             {
                 var curve = e.GetCurve() as ICurve;
                 var cpd = e.GetCurveParams3();
@@ -89,7 +89,7 @@ namespace TubeWorks.AddIn.Sw
                 var pts = new List<Vec3>();
                 for (int i = 0; i <= n; i++)
                 {
-                    var p = SwUtil.D(curve.Evaluate2(t0 + (t1 - t0) * i / n, 0));
+                    var p = SwUtil.D((object)curve.Evaluate2(t0 + (t1 - t0) * i / n, 0));
                     if (p != null && p.Length >= 3) pts.Add(SwUtil.V(p));
                 }
                 double len = 0;
@@ -100,7 +100,7 @@ namespace TubeWorks.AddIn.Sw
                     pts.Clear();
                     for (int i = 0; i <= m; i++)
                     {
-                        var p = SwUtil.D(curve.Evaluate2(t0 + (t1 - t0) * i / m, 0));
+                        var p = SwUtil.D((object)curve.Evaluate2(t0 + (t1 - t0) * i / m, 0));
                         if (p != null && p.Length >= 3) pts.Add(SwUtil.V(p));
                     }
                 }

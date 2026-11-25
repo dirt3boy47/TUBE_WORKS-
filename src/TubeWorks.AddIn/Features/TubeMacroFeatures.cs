@@ -58,7 +58,7 @@ namespace TubeWorks.AddIn.Features
             {
                 // A root on a non-TubeWorks tube: measure the start face now.
                 md.GetSelections3(out object objs, out object _, out object _, out object _, out object _);
-                var face = SwUtil.Arr<IFace2>(objs).FirstOrDefault();
+                var face = SwUtil.Arr<IFace2>((object)objs).FirstOrDefault();
                 if (face == null)
                     return "TubeWorks: the start face of this feature is missing. Edit the feature and select the tube end face again.";
                 var end = FaceAnalyzer.Analyze(face, out string ferr);
@@ -81,7 +81,7 @@ namespace TubeWorks.AddIn.Features
             if (seg == null) return "TubeWorks: " + err;
 
             IBody2 result = seg;
-            var edit = SwUtil.Arr<IBody2>(md.EditBodies);
+            var edit = SwUtil.Arr<IBody2>((object)md.EditBodies);
             if (me.Merge && edit.Length > 0)
             {
                 var copy = edit[0].Copy() as IBody2; // Copy2 (keeps face ids) is not in older SOLIDWORKS; ids are assigned below
@@ -119,8 +119,8 @@ namespace TubeWorks.AddIn.Features
         public static void Assign(IMacroFeatureData md, IBody2 body, FeatureSolution fs)
         {
             md.GetEntitiesNeedUserId(body, out object facesObj, out object edgesObj);
-            var faces = SwUtil.Arr<IFace2>(facesObj);
-            var edges = SwUtil.Arr<IEdge>(edgesObj);
+            var faces = SwUtil.Arr<IFace2>((object)facesObj);
+            var edges = SwUtil.Arr<IEdge>((object)edgesObj);
             int next = 10;
             foreach (var f in faces)
             {

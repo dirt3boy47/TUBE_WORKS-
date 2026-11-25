@@ -98,7 +98,7 @@ namespace TubeWorks.AddIn.Pmp
             if (Data.IsRoot)
             {
                 EditDef.GetSelections3(out object objs, out object _, out object _, out object _, out object _);
-                ForeignFace = SwUtil.Arr<IFace2>(objs).FirstOrDefault();
+                ForeignFace = SwUtil.Arr<IFace2>((object)objs).FirstOrDefault();
                 if (ForeignFace != null) ResolveFromFace(ForeignFace);
             }
         }
@@ -193,7 +193,7 @@ namespace TubeWorks.AddIn.Pmp
                 var chain = TubeFeatureStore.Solve(Model);
                 var fs = chain.Find(Data.Id);
                 if (fs == null || !fs.IsValid) return;
-                foreach (var face in SwUtil.Arr<IFace2>(feat.GetFaces()))
+                foreach (var face in SwUtil.Arr<IFace2>((object)feat.GetFaces()))
                 {
                     var end = FaceAnalyzer.Analyze(face, out string _);
                     if (end != null && end.Centre.AlmostEquals(fs.EndFrame.Origin, Math.Max(1e-6, end.OuterDiameter * 1e-5)))

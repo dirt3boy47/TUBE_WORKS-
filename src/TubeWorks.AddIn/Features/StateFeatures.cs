@@ -109,7 +109,7 @@ namespace TubeWorks.AddIn.Features
 
             var rep = new TransferReport();
             var held = new List<IBody2>();
-            var actual = SwUtil.Arr<IBody2>(md.EditBodies).FirstOrDefault();
+            var actual = SwUtil.Arr<IBody2>((object)md.EditBodies).FirstOrDefault();
             var body = BentToUnbent(c, u, actual, rep, held, out err);
             if (body == null) return "TubeWorks Unbend: " + err;
             MaterialTransfer.Reports[me.Id] = rep;
@@ -150,7 +150,7 @@ namespace TubeWorks.AddIn.Features
 
             var rep = new TransferReport();
             var tools = new List<IBody2>();
-            var actual = SwUtil.Arr<IBody2>(md.EditBodies).FirstOrDefault();
+            var actual = SwUtil.Arr<IBody2>((object)md.EditBodies).FirstOrDefault();
             if (actual != null)
             {
                 var unbentPath = u.UnbentPath;
@@ -192,7 +192,7 @@ namespace TubeWorks.AddIn.Features
             if (ActiveUnbends(c.Features).Any()) return "TubeWorks Flat Pattern: an Unbend is active. Add a Rebend first.";
             var u = TubeUnbender.ForFeature(c.Path, null);
             var rep = new TransferReport();
-            var body = BentToUnbent(c, u, SwUtil.Arr<IBody2>(md.EditBodies).FirstOrDefault(), rep, null, out err);
+            var body = BentToUnbent(c, u, SwUtil.Arr<IBody2>((object)md.EditBodies).FirstOrDefault(), rep, null, out err);
             if (body == null) return "TubeWorks Flat Pattern: " + err;
             MaterialTransfer.Reports[me.Id] = rep;
             UserIds.Assign(md, body, Solution(me, u.UnbentPath));

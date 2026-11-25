@@ -19,6 +19,7 @@ OutFile "${OUTDIR}\TubeWorksSetup-${VERSION}.exe"
 InstallDir "$PROGRAMFILES64\TubeWorks Designer"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
+!define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
 BrandingText "${APPNAME} ${VERSION}"
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey "ProductName" "${APPNAME}"
@@ -85,10 +86,16 @@ Section "Install"
   SetOutPath "$INSTDIR"
 
   DetailPrint "Registering the add-in with SOLIDWORKS..."
-  nsExec::ExecToLog '"${REGASM}" /codebase "$INSTDIR\TubeWorks.AddIn.dll"'
+  nsExec::ExecToStack '"${REGASM}" /codebase "$INSTDIR\TubeWorks.AddIn.dll"'
   Pop $0
+  Pop $1
+  DetailPrint "$1"
+  ; Keep RegAsm's output for support.
+  FileOpen $2 "$INSTDIR\regasm.log" w
+  FileWrite $2 "RegAsm exit code $0$\r$\n$1"
+  FileClose $2
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "Registration failed (RegAsm exit code $0). The add-in is copied but not registered." /SD IDOK
+    MessageBox MB_ICONSTOP "Registration failed (RegAsm exit code $0). The add-in is copied but not registered.$\r$\n$\r$\nDetails are in $INSTDIR\regasm.log" /SD IDOK
     Abort
   ${EndIf}
 
@@ -118,6 +125,7 @@ Section "Uninstall"
   Delete "$INSTDIR\TubeWorks.Geometry.dll"
   RMDir /r "$INSTDIR\Icons"
   RMDir /r "$INSTDIR\Documentation"
+  Delete "$INSTDIR\regasm.log"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
   RMDir /r "$SMPROGRAMS\TubeWorks Designer"

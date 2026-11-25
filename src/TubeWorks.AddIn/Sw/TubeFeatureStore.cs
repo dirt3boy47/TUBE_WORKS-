@@ -149,7 +149,7 @@ namespace TubeWorks.AddIn.Sw
         {
             try
             {
-                var faces = SwUtil.Arr<IFace2>(f.GetFaces());
+                var faces = SwUtil.Arr<IFace2>((object)f.GetFaces());
                 return faces.Length > 0 ? faces[0].GetBody() as IBody2 : null;
             }
             catch { return null; }

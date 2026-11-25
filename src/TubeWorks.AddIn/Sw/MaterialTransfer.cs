@@ -28,7 +28,7 @@ namespace TubeWorks.AddIn.Sw
             {
                 var xf = (MathTransform)mu.CreateTransform(test.ToSwArray(tr));
                 var mp = (IMathPoint)mu.CreatePoint(p.ToArray());
-                var r = SwUtil.D(((IMathPoint)mp.MultiplyTransform(xf)).ArrayData);
+                var r = SwUtil.D((object)((IMathPoint)mp.MultiplyTransform(xf)).ArrayData);
                 if (r != null && SwUtil.V(r).AlmostEquals(expected, 1e-9)) { _transposed = tr; return; }
             }
             throw new InvalidOperationException("Could not determine the SOLIDWORKS MathTransform layout.");
@@ -84,16 +84,16 @@ namespace TubeWorks.AddIn.Sw
         {
             var pieces = new List<RemovedPiece>();
             int err;
-            var cut = SwUtil.Arr<IBody2>(((IBody2)nominal.Copy()).Operations2((int)swBodyOperationType_e.SWBODYCUT, actual.Copy(), out err));
+            var cut = SwUtil.Arr<IBody2>((object)((IBody2)nominal.Copy()).Operations2((int)swBodyOperationType_e.SWBODYCUT, actual.Copy(), out err));
             foreach (var b in cut)
             {
-                var mp = SwUtil.D(b.GetMassProperties(1.0));
+                var mp = SwUtil.D((object)b.GetMassProperties(1.0));
                 double vol = mp != null && mp.Length > 3 ? mp[3] : 0;
                 if (vol < MinVolume) continue;
                 pieces.Add(new RemovedPiece { Body = b, Volume = vol, Samples = Samples(b) });
             }
-            var extra = SwUtil.Arr<IBody2>(((IBody2)actual.Copy()).Operations2((int)swBodyOperationType_e.SWBODYCUT, nominal.Copy(), out err));
-            added = extra.Any(b => { var m = SwUtil.D(b.GetMassProperties(1.0)); return m != null && m.Length > 3 && m[3] >= MinVolume; });
+            var extra = SwUtil.Arr<IBody2>((object)((IBody2)actual.Copy()).Operations2((int)swBodyOperationType_e.SWBODYCUT, nominal.Copy(), out err));
+            added = extra.Any(b => { var m = SwUtil.D((object)b.GetMassProperties(1.0)); return m != null && m.Length > 3 && m[3] >= MinVolume; });
             return pieces;
         }
 
@@ -101,12 +101,12 @@ namespace TubeWorks.AddIn.Sw
         private static List<Vec3> Samples(IBody2 b)
         {
             var list = new List<Vec3>();
-            foreach (var v in SwUtil.Arr<IVertex>(b.GetVertices()))
+            foreach (var v in SwUtil.Arr<IVertex>((object)b.GetVertices()))
             {
-                var p = SwUtil.D(v.GetPoint());
+                var p = SwUtil.D((object)v.GetPoint());
                 if (p != null) list.Add(SwUtil.V(p));
             }
-            var box = SwUtil.D(b.GetBodyBox());
+            var box = SwUtil.D((object)b.GetBodyBox());
             if (box != null && box.Length >= 6)
                 for (int i = 0; i < 8; i++)
                     list.Add(new Vec3((i & 1) == 0 ? box[0] : box[3], (i & 2) == 0 ? box[1] : box[4], (i & 4) == 0 ? box[2] : box[5]));
@@ -131,10 +131,10 @@ namespace TubeWorks.AddIn.Sw
             foreach (var t in tools)
             {
                 int err;
-                var res = SwUtil.Arr<IBody2>(body.Operations2((int)swBodyOperationType_e.SWBODYCUT, t.Copy(), out err));
+                var res = SwUtil.Arr<IBody2>((object)body.Operations2((int)swBodyOperationType_e.SWBODYCUT, t.Copy(), out err));
                 if (res.Length == 0) { error = $"Applying a transferred cut failed (modeler error {err})."; return null; }
                 // A cut can split the tube; keep the largest part and report it.
-                body = res.OrderByDescending(b => { var m = SwUtil.D(b.GetMassProperties(1.0)); return m != null && m.Length > 3 ? m[3] : 0; }).First();
+                body = res.OrderByDescending(b => { var m = SwUtil.D((object)b.GetMassProperties(1.0)); return m != null && m.Length > 3 ? m[3] : 0; }).First();
                 if (res.Length > 1) report?.NotTransferred.Add("A cut divides the tube into several bodies; only the largest body is kept.");
             }
             return body;

@@ -23,19 +23,20 @@
   <ItemGroup>
     <Reference Include="SolidWorks.Interop.sldworks">
       <HintPath>$(SwInteropDir)\SolidWorks.Interop.sldworks.dll</HintPath>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
       <Private>False</Private>
     </Reference>
     <Reference Include="SolidWorks.Interop.swconst">
       <HintPath>$(SwInteropDir)\SolidWorks.Interop.swconst.dll</HintPath>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
       <Private>False</Private>
     </Reference>
     <Reference Include="SolidWorks.Interop.swpublished">
       <HintPath>$(SwInteropDir)\SolidWorks.Interop.swpublished.dll</HintPath>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Drawing" />
   </ItemGroup>

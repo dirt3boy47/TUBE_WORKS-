@@ -52,7 +52,7 @@ namespace TubeWorks.AddIn.Sw
         {
             error = null;
             int err;
-            var res = SwUtil.Arr<IBody2>(target.Operations2((int)swBodyOperationType_e.SWBODYADD, tool, out err));
+            var res = SwUtil.Arr<IBody2>((object)target.Operations2((int)swBodyOperationType_e.SWBODYADD, tool, out err));
             if (res.Length != 1)
             {
                 error = $"Merging the tube segment failed (modeler error {err}, {res.Length} bodies). The segments may not touch.";
@@ -72,7 +72,7 @@ namespace TubeWorks.AddIn.Sw
             var inner = SolidCylinder(s.StartPoint - s.Direction * ext, s.Direction, p.InnerRadius, s.Length + 2 * ext, out error);
             if (inner == null) return null;
             int err;
-            var res = SwUtil.Arr<IBody2>(outer.Operations2((int)swBodyOperationType_e.SWBODYCUT, inner, out err));
+            var res = SwUtil.Arr<IBody2>((object)outer.Operations2((int)swBodyOperationType_e.SWBODYCUT, inner, out err));
             if (res.Length != 1) { error = $"Could not create the bore of the straight segment (modeler error {err})."; return null; }
             return res[0];
         }
@@ -94,7 +94,7 @@ namespace TubeWorks.AddIn.Sw
                 var body = _modeler.CreateBodyFromCyl(arr) as IBody2;
                 if (body == null) { error = "IModeler.CreateBodyFromCyl returned no body."; return null; }
                 if (!VerifyGeometry) return body;
-                var mp = SwUtil.D(body.GetMassProperties(1.0));
+                var mp = SwUtil.D((object)body.GetMassProperties(1.0));
                 if (mp == null || mp.Length < 4) { error = "Could not read mass properties of a temporary body."; return null; }
                 double vol = Math.PI * r * r * h;
                 if (Math.Abs(mp[3] - vol) > vol * 1e-3) { error = Diag("cylinder volume", vol, mp[3]); return null; }
@@ -134,8 +134,8 @@ namespace TubeWorks.AddIn.Sw
                 double small = Math.Min(0.1, a.Angle / 4);
                 Vec3 outwardS = outward0.RotateAbout(a.PlaneNormal, small);
                 Vec3 qs = a.Center + outwardS * (a.Radius + p.OuterRadius);
-                var uv0 = SwUtil.D(surf.ReverseEvaluate(q0.X, q0.Y, q0.Z));
-                var uvS = SwUtil.D(surf.ReverseEvaluate(qs.X, qs.Y, qs.Z));
+                var uv0 = SwUtil.D((object)surf.ReverseEvaluate(q0.X, q0.Y, q0.Z));
+                var uvS = SwUtil.D((object)surf.ReverseEvaluate(qs.X, qs.Y, qs.Z));
                 if (uv0 == null || uvS == null || uv0.Length < 2 || uvS.Length < 2) { error = "Could not evaluate the toroidal surface parameters."; return null; }
 
                 double du = Angles.WrapPi(uvS[0] - uv0[0]), dv = Angles.WrapPi(uvS[1] - uv0[1]);
@@ -174,7 +174,7 @@ namespace TubeWorks.AddIn.Sw
                         IBody2 solid;
                         try { solid = _modeler.ThickenSheet((Body2)(sheet.Copy() as IBody2 ?? sheet), p.WallThickness, side); } catch { solid = null; }
                         if (solid == null) continue;
-                        var mp = SwUtil.D(solid.GetMassProperties(1.0));
+                        var mp = SwUtil.D((object)solid.GetMassProperties(1.0));
                         if (mp != null && mp.Length >= 4 && Math.Abs(mp[3] - expected) <= expected * 2e-3) return solid;
                     }
                 }
@@ -191,7 +191,7 @@ namespace TubeWorks.AddIn.Sw
         public bool CheckVolume(IBody2 body, double expected, string what, out string error)
         {
             error = null;
-            var mp = SwUtil.D(body.GetMassProperties(1.0));
+            var mp = SwUtil.D((object)body.GetMassProperties(1.0));
             if (mp == null || mp.Length < 4) { error = "Could not read mass properties of the " + what + "."; return false; }
             if (Math.Abs(mp[3] - expected) > expected * 2e-3) { error = Diag(what + " volume", expected, mp[3]); return false; }
             return true;
