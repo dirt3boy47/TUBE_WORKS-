@@ -1,0 +1,28 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Geometry engine unit tests
+        run: dotnet test tests/TubeWorks.Geometry.Tests
+      - name: Compile the add-in against the SOLIDWORKS 2026 interop assemblies (no SOLIDWORKS needed)
+        run: |
+          ./tools/fetch-interop.sh
+          dotnet build src/TubeWorks.AddIn/TubeWorks.AddIn.csproj -c Release -p:SwInteropDir=$PWD/interop
+      - name: Build the setup program
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q nsis
+          ./installer/build-installer.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TubeWorksSetup
+          path: installer/out/*.exe

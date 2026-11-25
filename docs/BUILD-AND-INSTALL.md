@@ -26,7 +26,7 @@ If registration fails, the setup program writes RegAsm's output to `C:\Program F
 - Windows: install NSIS 3, then `powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1`. This compiles against
   your SOLIDWORKS installation (`api\redist`).
 - The version number is in `Directory.Build.props` (`TubeWorksVersion`).
-- The GitHub workflow builds the setup program on every change under `tubeworks/` and attaches it as the artifact **TubeWorksSetup**.
+- The GitHub workflow builds the setup program on every push and attaches it as the artifact **TubeWorksSetup**.
 
 # Manual build and install (developers)
 
@@ -114,4 +114,4 @@ Parts that contain TubeWorks features still open without the add-in. The feature
 dotnet build src/TubeWorks.AddIn/TubeWorks.AddIn.csproj -p:SwInteropDir=$PWD/interop
 ```
 
-This proves that every API member used exists with the used signature. It does not run anything. The GitHub workflow `.github/workflows/tubeworks.yml` runs the unit tests and this compile check on every change under `tubeworks/`.
+This proves that every API member used exists with the used signature. It does not run anything. The GitHub workflow `.github/workflows/build.yml` runs the unit tests, this compile check and the setup-program build on every push.
