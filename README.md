@@ -2,7 +2,7 @@
 
 Native SOLIDWORKS add-in for parametric circular tube design: select a tube end face, bend it, extend it, flatten it to a straight blank, and get the bend table.
 
-**Status: release 0.4.0 — Phases 1, 2 and 3 of the specification are implemented.** 55 engine tests pass; the add-in compiles with no errors or warnings against the SOLIDWORKS 2016 and 2026 APIs. 0.2.1 was used in SOLIDWORKS 2026 SP4. Everything added since 0.3.0 (drawings, DWG, Phase 3) has **not** yet run in SOLIDWORKS: use `docs/TEST-PLAN.md`.
+**Status: release 0.4.0 — Phases 1, 2 and 3 of the specification are implemented.** 56 engine tests pass; the add-in compiles with no errors or warnings against the SOLIDWORKS 2016 and 2026 APIs. 0.2.1 was used in SOLIDWORKS 2026 SP4. Everything added since 0.3.0 (drawings, DWG, Phase 3) has **not** yet run in SOLIDWORKS: use `docs/TEST-PLAN.md`.
 
 | Implemented | Not implemented |
 |---|---|
@@ -10,7 +10,7 @@ Native SOLIDWORKS add-in for parametric circular tube design: select a tube end 
 
 ## Install
 
-Run `TubeWorksSetup-0.4.2.exe` (from the CI artifact or `installer/build-installer.sh`) as Administrator with SOLIDWORKS closed. See [docs/BUILD-AND-INSTALL.md](docs/BUILD-AND-INSTALL.md).
+Run `TubeWorksSetup-0.4.3.exe` (from the CI artifact or `installer/build-installer.sh`) as Administrator with SOLIDWORKS closed. See [docs/BUILD-AND-INSTALL.md](docs/BUILD-AND-INSTALL.md).
 
 ## Build from source
 

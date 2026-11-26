@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace TubeWorks.Geometry
 {
-    public enum PatternLayer { OuterProfile, InternalCutouts, BendLines, Centreline, Engraving, Construction, Text }
+    public enum PatternLayer { OuterProfile, InternalCutouts, BendLines, Centreline, Engraving, Construction, Text, GuideFirstStraight, GuideStraight }
 
     public struct Point2 { public double X, Y; public Point2(double x, double y) { X = x; Y = y; } public override string ToString() => $"({X:0.######}, {Y:0.######})"; }
 

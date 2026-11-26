@@ -252,6 +252,27 @@ namespace TubeWorks.Geometry.Tests
         }
 
         [Fact]
+        public void SheetLayout_FitsWidth_HatchStaysInsideZones_AndHasBubbles()
+        {
+            var t = ScreenshotTube(35);
+            var p = TubeProfile.FromOdWall(0.065, 0.002);
+            var pat = BendingGuide.Sheet(t, null, p, 0.36);
+            var pts = pat.Polylines.SelectMany(x => x.Points).ToList();
+            Assert.True(pts.Min(q => q.X) >= -1e-9 && pts.Max(q => q.X) <= 0.36 + 1e-9);
+            Assert.Equal(2, pat.Circles.Count);
+            // Bend zone hatch lines lie between the bend start and end marks.
+            double k = 0.36 / t.TotalDevelopedLength;
+            var steps = BendingLayout.Steps(t);
+            var bendHatch = pat.Polylines.Where(x => x.Layer == PatternLayer.BendLines && Math.Abs(x.Points[1].Y - x.Points[0].Y) > 1e-9 && Math.Abs(x.Points[1].X - x.Points[0].X) > 1e-9).ToList();
+            Assert.NotEmpty(bendHatch);
+            Assert.All(bendHatch, h => Assert.Contains(steps, s => h.Points.All(q => q.X >= s.MarkStart * k - 1e-9 && q.X <= (s.MarkStart + s.BendLength) * k + 1e-9)));
+            Assert.Contains(pat.Polylines, x => x.Layer == PatternLayer.GuideFirstStraight);
+            Assert.Contains(pat.Texts, x => x.Text == "178.5");
+            Assert.Contains(pat.Texts, x => x.Text.StartsWith("TURN TUBE 35° ACW"));
+            Assert.All(BendingGuide.Wrap(string.Join(" ", BendingGuide.Instructions(t, null)), 60), l => Assert.True(l.Length <= 60 || !l.Contains(' ')));
+        }
+
+        [Fact]
         public void RightHandRotation_LooksClockwiseFromS()
         {
             // Independent check of the wording: rotate +Y by +90° right-hand about +X (direction from S along the tube).

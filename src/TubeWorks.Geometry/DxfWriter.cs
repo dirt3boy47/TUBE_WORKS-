@@ -18,11 +18,14 @@ namespace TubeWorks.Geometry
             [PatternLayer.Engraving] = "ENGRAVING",
             [PatternLayer.Construction] = "CONSTRUCTION",
             [PatternLayer.Text] = "TEXT",
+            [PatternLayer.GuideFirstStraight] = "GUIDE_FIRST_STRAIGHT",
+            [PatternLayer.GuideStraight] = "GUIDE_STRAIGHT",
         };
         public Dictionary<PatternLayer, int> Colours { get; } = new Dictionary<PatternLayer, int>
         {
             [PatternLayer.OuterProfile] = 7, [PatternLayer.InternalCutouts] = 1, [PatternLayer.BendLines] = 3,
             [PatternLayer.Centreline] = 4, [PatternLayer.Engraving] = 6, [PatternLayer.Construction] = 8, [PatternLayer.Text] = 2,
+            [PatternLayer.GuideFirstStraight] = 3, [PatternLayer.GuideStraight] = 5,
         };
         public LengthUnit Unit { get; set; } = LengthUnit.Millimetre;
         public double Scale { get; set; } = 1.0;

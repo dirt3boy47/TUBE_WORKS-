@@ -137,6 +137,95 @@ namespace TubeWorks.Geometry
             return list;
         }
 
+        /// <summary>
+        /// The guide as 2D geometry for a drawing sheet, in PAPER metres, lower-left corner at (0, 0), <paramref name="width"/> wide.
+        /// Zones are filled with 45° hatch lines in the zone colour (layers: first straight, straight, bend). Texts are 2.5 mm high.
+        /// </summary>
+        public static Pattern2D Sheet(BendTable t, CompensatedData c, TubeProfile p, double width)
+        {
+            var steps = BendingLayout.Steps(t, c);
+            double len = c?.CutLength ?? t.TotalDevelopedLength;
+            double k = width / len;
+            double th = 0.0025, tubeH = Math.Max(p.OuterDiameter * k, 0.010), hatch = 0.0018;
+            double y0 = 0.030, y1 = y0 + tubeH, yc = (y0 + y1) / 2;   // room for the ruler below
+            var pat = new Pattern2D { Length = width, Width = y1 + 0.040 };
+            string F(double v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+
+            var zones = new List<(double s0, double s1, bool bend)>();
+            double cur = 0;
+            foreach (var st in steps)
+            {
+                if (st.MarkStart > cur + 1e-12) zones.Add((cur, st.MarkStart, false));
+                zones.Add((st.MarkStart, st.MarkStart + st.BendLength, true));
+                cur = st.MarkStart + st.BendLength;
+            }
+            if (len > cur + 1e-12) zones.Add((cur, len, false));
+
+            bool first = true;
+            foreach (var z in zones)
+            {
+                var layer = z.bend ? PatternLayer.BendLines : first ? PatternLayer.GuideFirstStraight : PatternLayer.GuideStraight;
+                if (!z.bend) first = false;
+                double xa = z.s0 * k, xb = z.s1 * k;
+                // 45° hatch clipped to the zone rectangle.
+                for (double d = xa - tubeH; d < xb; d += hatch)
+                {
+                    double ax = Math.Max(xa, d), bx = Math.Min(xb, d + tubeH);
+                    if (bx - ax < 1e-6) continue;
+                    pat.Line(layer, ax, y0 + (ax - d), bx, y0 + (bx - d));
+                }
+                pat.Line(layer, xa, yc, xb, yc);                     // centreline in zone colour
+                pat.Line(PatternLayer.OuterProfile, xa, y0 - 0.002, xa, y1 + 0.002); // zone boundary (ring)
+            }
+            var outline = new PatternPolyline { Layer = PatternLayer.OuterProfile, Closed = true };
+            outline.Points.AddRange(new[] { new Point2(0, y0), new Point2(width, y0), new Point2(width, y1), new Point2(0, y1) });
+            pat.Polylines.Add(outline);
+            pat.Texts.Add(new PatternText { Layer = PatternLayer.Text, At = new Point2(0, y1 + 0.003), Height = th, Text = "S (START END)" });
+
+            // Bubbles and labels above the bar, two heights so that close bends do not overlap.
+            foreach (var st in steps)
+            {
+                double xm = st.MarkCentre * k, yb = y1 + 0.012 + (st.Number % 2 == 0 ? 0.014 : 0);
+                pat.Line(PatternLayer.BendLines, xm, y1, xm, yb - 0.003);
+                pat.Circles.Add(new PatternCircle { Layer = PatternLayer.BendLines, Centre = new Point2(xm, yb), Radius = 0.003 });
+                pat.Texts.Add(new PatternText { Layer = PatternLayer.Text, At = new Point2(xm - 0.0012 * st.Number.ToString().Length, yb - 0.0012), Height = th, Text = st.Number.ToString(CultureInfo.InvariantCulture) });
+                string ang = Math.Abs(st.CommandDeg - st.DesignDeg) > 1e-6 ? $"BEND {N(st.DesignDeg)}° (SET {N(st.CommandDeg)}°)" : $"BEND {N(st.DesignDeg)}°";
+                string rot = st.Number == 1 ? "FIRST BEND" : Turn(st.RotationDeg).ToUpperInvariant();
+                pat.Texts.Add(new PatternText { Layer = PatternLayer.Text, At = new Point2(xm + 0.004, yb), Height = th, Text = ang });
+                pat.Texts.Add(new PatternText { Layer = PatternLayer.Text, At = new Point2(xm + 0.004, yb - 0.0035), Height = th, Text = $"{rot}, CLR {F(st.Clr * 1000)}" });
+            }
+
+            // Ruler with bend start marks (and zone ends), alternating rows.
+            double yr = y0 - 0.008;
+            pat.Line(PatternLayer.Construction, 0, yr, width, yr);
+            var ticks = new List<(double s, bool start)> { (0, false), (len, false) };
+            foreach (var st in steps) { ticks.Add((st.MarkStart, true)); ticks.Add((st.MarkStart + st.BendLength, false)); }
+            ticks = ticks.GroupBy(x => Math.Round(x.s, 7)).Select(g => (g.First().s, g.Any(x => x.start))).OrderBy(x => x.Item1).ToList();
+            int row = 0;
+            foreach (var (s, start) in ticks)
+            {
+                double x = s * k;
+                pat.Line(start ? PatternLayer.BendLines : PatternLayer.Construction, x, yr - 0.0015, x, yr + 0.0015);
+                pat.Texts.Add(new PatternText { Layer = start ? PatternLayer.BendLines : PatternLayer.Text, At = new Point2(x - 0.003, yr - 0.005 - (row++ % 2) * 0.0045), Height = th, Text = F(s * 1000) });
+            }
+            return pat;
+        }
+
+        /// <summary>Wrap text to lines of at most <paramref name="width"/> characters.</summary>
+        public static List<string> Wrap(string text, int width)
+        {
+            var lines = new List<string>();
+            var line = new StringBuilder();
+            foreach (var w in text.Split(' '))
+            {
+                if (line.Length > 0 && line.Length + 1 + w.Length > width) { lines.Add(line.ToString()); line.Clear(); }
+                if (line.Length > 0) line.Append(' ');
+                line.Append(w);
+            }
+            if (line.Length > 0) lines.Add(line.ToString());
+            return lines;
+        }
+
         /// <summary>Printable HTML page: title, SVG, step table and instructions.</summary>
         public static string Html(string part, TubeProfile p, string material, BendTable t, CompensatedData c)
         {

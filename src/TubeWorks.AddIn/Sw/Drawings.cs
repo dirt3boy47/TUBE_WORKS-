@@ -19,6 +19,7 @@ namespace TubeWorks.AddIn.Sw
         public string Template = "";
         public bool FirstAngle = true; // ISO
         public bool DevelopedSurface = true;
+        public bool GuideSheet = true;
         public UnwrapSurface Surface = UnwrapSurface.Outside;
         public double SeamAngle = 0;
     }
@@ -31,6 +32,7 @@ namespace TubeWorks.AddIn.Sw
             // COLORREF 0x00BBGGRR
             [PatternLayer.OuterProfile] = 0x000000, [PatternLayer.InternalCutouts] = 0x0080FF, [PatternLayer.BendLines] = 0x2A2AD0,
             [PatternLayer.Centreline] = 0xC85624, [PatternLayer.Engraving] = 0xC000C0, [PatternLayer.Construction] = 0x808080, [PatternLayer.Text] = 0x0080C0,
+            [PatternLayer.GuideFirstStraight] = 0x3A9D1F, [PatternLayer.GuideStraight] = 0xC85624,
         };
 
         public static void EnsureLayers(IModelDoc2 drawing, DxfLayerSettings names)
@@ -229,6 +231,11 @@ namespace TubeWorks.AddIn.Sw
                     SheetSketch.Draw(doc, pattern, W * 0.08, H * 0.10, ps, new DxfLayerSettings(), s2);
                     SheetSketch.Note(doc, $"DEVELOPED {o.Surface.ToString().ToUpperInvariant()} SURFACE  SCALE {ScaleText(ps)}  (1:1 file: Unwrap Tube Surface)", W * 0.08, H * 0.10 + pattern.Width * ps + 0.008);
                 }
+                if (o.GuideSheet && table.Rows.Count > 0)
+                {
+                    try { DrawGuideSheet(drw, doc, part.GetTitle(), table, comp, prof, code, templIn, sheetFormat, W, H, o.FirstAngle); }
+                    catch (Exception gex) { Log.Error("Guide sheet", gex); notes.Add("Bending Guide sheet not completed: " + gex.Message); }
+                }
                 drw.ActivateSheet(sheetName);
             }
             doc.ForceRebuild3(true);
@@ -300,16 +307,50 @@ namespace TubeWorks.AddIn.Sw
             string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
             var tab = drw.InsertTableAnnotation2(false, x, y, (int)swBOMConfigurationAnchorType_e.swBOMConfigurationAnchor_TopLeft, "", steps.Count + 2, 7) as ITableAnnotation;
             if (tab == null) return;
-            string[] head = { "STEP", "MARK AT (MM)", "BEND CENTRE AT (MM)", "ROTATE (°)", "BEND (°)", "COMMAND (°)", "CLR (MM)" };
+            string[] head = { "STEP", "MARK FROM S (MM)", "BEND CENTRE AT (MM)", "TURN TUBE (SEEN FROM S)", "BEND (°)", "SET BENDER TO (°)", "CLR (MM)" };
             for (int c = 0; c < head.Length; c++) tab.Text[0, c] = head[c];
             for (int i = 0; i < steps.Count; i++)
             {
                 var st = steps[i];
-                string[] row = { "B" + st.Number, F(st.MarkStart * 1000), F(st.MarkCentre * 1000), F(st.RotationDeg), F(st.DesignDeg), F(st.CommandDeg), F(st.Clr * 1000) };
+                string turn = st.Number == 1 ? "REFERENCE LINE ON TOP" : BendingGuide.Turn(st.RotationDeg).ToUpperInvariant();
+                string[] row = { "B" + st.Number, F(st.MarkStart * 1000), F(st.MarkCentre * 1000), turn, F(st.DesignDeg), F(st.CommandDeg), F(st.Clr * 1000) };
                 for (int c = 0; c < row.Length; c++) tab.Text[i + 1, c] = row[c];
             }
             tab.Text[steps.Count + 1, 0] = "CUT";
             tab.Text[steps.Count + 1, 1] = F(comp.CutLength * 1000);
+        }
+
+        /// <summary>
+        /// Sheet "Bending Guide": the rolled-out tube (hatched zones: first straight green, straights blue, bends red),
+        /// bubbles with angle and turn, ruler of bend start marks from S, the bending table and the numbered steps.
+        /// Drawn at sheet scale 1:1 in paper units, so the graphic always fits the sheet width.
+        /// </summary>
+        private static void DrawGuideSheet(IDrawingDoc drw, IModelDoc2 doc, string title, BendTable table, CompensatedData comp, TubeProfile prof,
+            int code, int templIn, string sheetFormat, double W, double H, bool firstAngle)
+        {
+            drw.NewSheet3("Bending Guide", code, templIn, 1, 1, firstAngle, sheetFormat, W, H, "");
+            drw.EditSheet();
+            double x0 = W * 0.06, gw = W * 0.88;
+            SheetSketch.Note(doc, "BENDING GUIDE — " + System.IO.Path.GetFileNameWithoutExtension(title), x0, H * 0.94, 0.005);
+            SheetSketch.Note(doc, $"TUBE OD {(prof.OuterDiameter * 1000):0.###} x {(prof.WallThickness * 1000):0.###}   CUT LENGTH {(comp.CutLength * 1000):0.#} mm   " +
+                "GREEN = FIRST STRAIGHT, BLUE = STRAIGHT, RED = BEND   DISTANCES FROM THE START END S", x0, H * 0.905, 0.003);
+            var g = BendingGuide.Sheet(table, comp, prof, gw);
+            SheetSketch.Draw(doc, g, x0, H * 0.66, 1.0, new DxfLayerSettings(), 1.0);
+
+            var steps = BendingLayout.Steps(table, comp);
+            double ty = H * 0.60;
+            InsertSequenceTable(drw, steps, comp, x0, ty);
+            double sy = ty - (steps.Count + 2) * 0.0075 - 0.012;
+            int chars = Math.Max(50, (int)(W * 0.55 / (0.0025 * 0.62)));
+            var lines = new List<string>();
+            int n = 1;
+            foreach (var step in BendingGuide.Instructions(table, comp))
+            {
+                var wrapped = BendingGuide.Wrap(step, chars - 4);
+                lines.Add($"{n++}. {wrapped[0]}");
+                lines.AddRange(wrapped.Skip(1).Select(l => "    " + l));
+            }
+            SheetSketch.Note(doc, "MANUAL BENDING STEPS\n" + string.Join("\n", lines), x0, sy, 0.0025);
         }
 
         /// <summary>Configuration "TW Straight" in which only the Tube Flat Pattern is unsuppressed.</summary>

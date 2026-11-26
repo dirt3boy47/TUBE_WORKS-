@@ -214,6 +214,7 @@ namespace TubeWorks.AddIn.Ui
         private readonly System.Windows.Forms.ComboBox _proj = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Width = 220 };
         private readonly System.Windows.Forms.ComboBox _surface = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Width = 220 };
         private readonly System.Windows.Forms.CheckBox _dev = new System.Windows.Forms.CheckBox { Text = "Developed surface pattern on sheet 2", Checked = true, AutoSize = true };
+        private readonly System.Windows.Forms.CheckBox _guide = new System.Windows.Forms.CheckBox { Text = "Bending Guide sheet (rolled-out tube, marks, turns, steps)", Checked = true, AutoSize = true };
         private readonly System.Windows.Forms.ComboBox _template = new System.Windows.Forms.ComboBox { Width = 330, DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDown };
         private Sw.DrawingOptions _result;
 
@@ -238,7 +239,7 @@ namespace TubeWorks.AddIn.Ui
         private DrawingForm(SolidWorks.Interop.sldworks.ISldWorks app, SolidWorks.Interop.sldworks.IModelDoc2 model)
         {
             _app = app;
-            Text = "TubeWorks Drawing"; Width = 600; Height = 340; FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog; StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
+            Text = "TubeWorks Drawing"; Width = 600; Height = 370; FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog; StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
             _paper.Items.AddRange(new object[] { "From the template", "A4", "A3", "A2", "A1" }); _paper.SelectedIndex = 0;
             _proj.Items.AddRange(new object[] { "First angle (ISO)", "Third angle" }); _proj.SelectedIndex = 0;
             _surface.Items.AddRange(new object[] { "Outside surface", "Inside surface", "Neutral surface" }); _surface.SelectedIndex = 0;
@@ -256,7 +257,7 @@ namespace TubeWorks.AddIn.Ui
             tp.Controls.Add(_template); tp.Controls.Add(browse);
             var t2 = new System.Windows.Forms.TableLayoutPanel { Dock = System.Windows.Forms.DockStyle.Fill, ColumnCount = 2, Padding = new System.Windows.Forms.Padding(8) };
             void Row(string l, System.Windows.Forms.Control c) { t2.Controls.Add(new System.Windows.Forms.Label { Text = l, AutoSize = true }); t2.Controls.Add(c); }
-            Row("Drawing template", tp); Row("Sheet size", _paper); Row("Projection", _proj); Row("", _dev); Row("Developed surface", _surface);
+            Row("Drawing template", tp); Row("Sheet size", _paper); Row("Projection", _proj); Row("", _dev); Row("Developed surface", _surface); Row("", _guide);
             var ok = new System.Windows.Forms.Button { Text = "Create drawing", AutoSize = true };
             ok.Click += (o, e) => Create();
             Row("", ok);
@@ -269,7 +270,7 @@ namespace TubeWorks.AddIn.Ui
             _result = new Sw.DrawingOptions
             {
                 Paper = _paper.SelectedIndex <= 0 ? (Sw.DrawingPaper?)null : (Sw.DrawingPaper)(_paper.SelectedIndex - 1), FirstAngle = _proj.SelectedIndex == 0,
-                DevelopedSurface = _dev.Checked, Surface = (TubeWorks.Geometry.UnwrapSurface)System.Math.Max(0, _surface.SelectedIndex), Template = _template.Text.Trim(),
+                DevelopedSurface = _dev.Checked, GuideSheet = _guide.Checked, Surface = (TubeWorks.Geometry.UnwrapSurface)System.Math.Max(0, _surface.SelectedIndex), Template = _template.Text.Trim(),
             };
             if (_result.Template.Length > 0 && !System.IO.File.Exists(_result.Template))
             { System.Windows.Forms.MessageBox.Show(this, "The template file does not exist: " + _result.Template, Text); _result = null; return; }
