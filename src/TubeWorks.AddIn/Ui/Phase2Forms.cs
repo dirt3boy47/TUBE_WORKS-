@@ -44,12 +44,15 @@ namespace TubeWorks.AddIn.Ui
             }
             Row("", new Label { Text = "Seam angle is measured about the tube axis from the reference\ndirection used for bend plane rotation.", AutoSize = true, ForeColor = Color.DimGray });
             var ok = new Button { Text = "Export DXF…", AutoSize = true };
-            ok.Click += (o, e) => Export();
+            ok.Click += (o, e) => Export(false);
             Row("", ok);
+            var dwg = new Button { Text = "Export DWG… (through SOLIDWORKS)", AutoSize = true };
+            dwg.Click += (o, e) => Export(true);
+            Row("", dwg);
             Controls.Add(t);
         }
 
-        private void Export()
+        private void Export(bool dwg)
         {
             var surface = (UnwrapSurface)Math.Max(0, _surface.SelectedIndex);
             Pattern2D pat;
@@ -59,10 +62,15 @@ namespace TubeWorks.AddIn.Ui
 
             var settings = new DxfLayerSettings { Unit = _unit.SelectedIndex == 1 ? LengthUnit.Inch : LengthUnit.Millimetre };
             foreach (var kv in _layers) settings.Names[kv.Key] = string.IsNullOrWhiteSpace(kv.Value.Text) ? settings.Names[kv.Key] : kv.Value.Text.Trim();
-            using (var d = new SaveFileDialog { Filter = "DXF R12 (*.dxf)|*.dxf", FileName = Path.GetFileNameWithoutExtension(_model.GetTitle()) + " unwrapped.dxf" })
+            using (var d = new SaveFileDialog { Filter = dwg ? "DWG (*.dwg)|*.dwg" : "DXF R12 (*.dxf)|*.dxf", FileName = Path.GetFileNameWithoutExtension(_model.GetTitle()) + (dwg ? " unwrapped.dwg" : " unwrapped.dxf") })
             {
                 if (d.ShowDialog(this) != DialogResult.OK) return;
-                File.WriteAllText(d.FileName, DxfWriter.Write(pat, settings), Encoding.ASCII);
+                if (dwg)
+                {
+                    if (settings.Unit == LengthUnit.Inch) { MessageBox.Show(this, "DWG export is written in millimetres at 1:1 (the drawing sheet unit). Choose mm.", Text); return; }
+                    if (!DwgExport.Export(_app, pat, settings, d.FileName, out string derr)) { MessageBox.Show(this, derr, Text); return; }
+                }
+                else File.WriteAllText(d.FileName, DxfWriter.Write(pat, settings), Encoding.ASCII);
             }
             string msg = string.Format(CultureInfo.InvariantCulture, "Exported at 1:1 in {0}. Pattern {1:0.###} × {2:0.###} {0}.",
                 settings.Unit == LengthUnit.Inch ? "inch" : "mm", pat.Length * (settings.Unit == LengthUnit.Inch ? 1 / 0.0254 : 1000), pat.Width * (settings.Unit == LengthUnit.Inch ? 1 / 0.0254 : 1000));
@@ -192,6 +200,62 @@ namespace TubeWorks.AddIn.Ui
                 }
                 catch (Exception ex) { MessageBox.Show(this, "Export failed: " + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
             }
+        }
+    }
+}
+
+namespace TubeWorks.AddIn.Ui
+{
+    /// <summary>Options for the automatic manufacturing drawing.</summary>
+    internal sealed class DrawingForm : System.Windows.Forms.Form
+    {
+        private readonly SolidWorks.Interop.sldworks.ISldWorks _app;
+        private readonly SolidWorks.Interop.sldworks.IModelDoc2 _model;
+        private readonly System.Windows.Forms.ComboBox _paper = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Width = 120 };
+        private readonly System.Windows.Forms.ComboBox _proj = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Width = 220 };
+        private readonly System.Windows.Forms.ComboBox _surface = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Width = 220 };
+        private readonly System.Windows.Forms.CheckBox _dev = new System.Windows.Forms.CheckBox { Text = "Developed surface pattern on sheet 2", Checked = true, AutoSize = true };
+        private readonly System.Windows.Forms.TextBox _template = new System.Windows.Forms.TextBox { Width = 300 };
+
+        public static void ShowFor(SolidWorks.Interop.sldworks.ISldWorks app, SolidWorks.Interop.sldworks.IModelDoc2 model)
+        { using (var f = new DrawingForm(app, model)) f.ShowDialog(new SwWindow(app)); }
+
+        private DrawingForm(SolidWorks.Interop.sldworks.ISldWorks app, SolidWorks.Interop.sldworks.IModelDoc2 model)
+        {
+            _app = app; _model = model;
+            Text = "TubeWorks Drawing"; Width = 520; Height = 330; FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog; StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
+            _paper.Items.AddRange(new object[] { "A4", "A3", "A2", "A1" }); _paper.SelectedIndex = 1;
+            _proj.Items.AddRange(new object[] { "First angle (ISO)", "Third angle" }); _proj.SelectedIndex = 0;
+            _surface.Items.AddRange(new object[] { "Outside surface", "Inside surface", "Neutral surface" }); _surface.SelectedIndex = 0;
+            _template.Text = app.GetUserPreferenceStringValue((int)SolidWorks.Interop.swconst.swUserPreferenceStringValue_e.swDefaultTemplateDrawing);
+            var t = new System.Windows.Forms.TableLayoutPanel { Dock = System.Windows.Forms.DockStyle.Fill, ColumnCount = 2, Padding = new System.Windows.Forms.Padding(8) };
+            void Row(string l, System.Windows.Forms.Control c) { t.Controls.Add(new System.Windows.Forms.Label { Text = l, AutoSize = true }); t.Controls.Add(c); }
+            Row("Sheet size", _paper); Row("Projection", _proj); Row("Drawing template", _template); Row("", _dev); Row("Developed surface", _surface);
+            var ok = new System.Windows.Forms.Button { Text = "Create drawing", AutoSize = true };
+            ok.Click += (o, e) => Create();
+            Row("", ok);
+            Row("", new System.Windows.Forms.Label { Text = "The part must be saved. A configuration \"TW Straight\" is added for the straightened view.", AutoSize = true, ForeColor = System.Drawing.Color.DimGray });
+            Controls.Add(t);
+        }
+
+        private void Create()
+        {
+            var o = new Sw.DrawingOptions
+            {
+                Paper = (Sw.DrawingPaper)System.Math.Max(0, _paper.SelectedIndex), FirstAngle = _proj.SelectedIndex == 0,
+                DevelopedSurface = _dev.Checked, Surface = (TubeWorks.Geometry.UnwrapSurface)System.Math.Max(0, _surface.SelectedIndex), Template = _template.Text.Trim(),
+            };
+            Cursor = System.Windows.Forms.Cursors.WaitCursor;
+            SolidWorks.Interop.sldworks.IModelDoc2 doc;
+            System.Collections.Generic.List<string> notes; string err;
+            try { doc = Sw.DrawingGenerator.Create(_app, _model, o, out notes, out err); }
+            catch (System.Exception ex) { Log.Error("Drawing", ex); doc = null; notes = new System.Collections.Generic.List<string>(); err = ex.Message; }
+            finally { Cursor = System.Windows.Forms.Cursors.Default; }
+            if (doc == null) { System.Windows.Forms.MessageBox.Show(this, "The drawing was not created: " + err, Text); return; }
+            string msg = "Drawing created. Check it before use: view placement and annotations depend on your template.";
+            if (notes.Count > 0) msg += "\n\nNotes:\n" + string.Join("\n", System.Linq.Enumerable.Select(notes, n => "• " + n));
+            System.Windows.Forms.MessageBox.Show(this, msg, Text);
+            Close();
         }
     }
 }

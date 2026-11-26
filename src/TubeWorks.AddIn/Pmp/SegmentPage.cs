@@ -28,6 +28,14 @@ namespace TubeWorks.AddIn.Pmp
         protected IFace2 ForeignFace;                    // start face when the tube is not a TubeWorks tube
         protected IBody2 EditBody;
         protected string AttachText = "";
+        /// <summary>TubeWorks features read once (names included) when the start is resolved; refreshes reuse it.</summary>
+        private List<StoredFeature> _tree;
+        private readonly string _editName;
+        private TubeLibrary _library;
+        private protected TubeLibrary Library => _library ?? (_library = LibraryStore.Load());
+
+        private List<StoredFeature> Tree => _tree ?? (_tree = TubeFeatureStore.Scan(Model));
+        private ChainResult SolveTree() { _tree = TubeFeatureStore.Scan(Model); return TubeFeatureStore.Solve(_tree); }
 
         protected bool IsEdit => EditFeature != null;
 
@@ -40,6 +48,7 @@ namespace TubeWorks.AddIn.Pmp
             Preview = new Preview(model);
             Handles = new Handles(app, model);
             Builder = new BodyBuilder(app) { VerifyGeometry = UserSettings.Current.VerifyGeometry };
+            _editName = editFeature != null ? editFeature.Name : "(new)";
         }
 
         /// <summary>Recognise an end face and find what it belongs to. Returns an error message, or null.</summary>
@@ -47,7 +56,7 @@ namespace TubeWorks.AddIn.Pmp
         {
             var end = FaceAnalyzer.Analyze(face, out string err);
             if (end == null) return err;
-            var chain = TubeFeatureStore.Solve(Model);
+            var chain = SolveTree();
             double tol = Math.Max(1e-6, end.OuterDiameter * 1e-5);
             if (TubeChainSolver.TryMatchEnd(chain, end.Centre, end.OutwardNormal, tol, out var parent, out var pend) && parent.Data.Id != Data.Id)
             {
@@ -86,7 +95,7 @@ namespace TubeWorks.AddIn.Pmp
         /// <summary>Start of the feature being edited, from the solved chain.</summary>
         protected void ResolveForEdit()
         {
-            var chain = TubeFeatureStore.Solve(Model);
+            var chain = SolveTree();
             var fs = chain.Find(Data.Id);
             if (fs != null && fs.Profile != null && fs.StartFrame.Tangent.Length > 0.5)
             {
@@ -127,10 +136,10 @@ namespace TubeWorks.AddIn.Pmp
         /// <summary>Whole tube with this feature's current input: for developed length and validation.</summary>
         protected ChainResult SolveWithCurrent()
         {
-            var list = TubeFeatureStore.Scan(Model);
+            var list = Tree;
             var inputs = list.Where(s => s.Data.Id != Data.Id)
-                .Select(s => new ChainInput { Data = s.Data, FeatureName = s.Feature.Name, Suppressed = s.Suppressed }).ToList();
-            var mine = new ChainInput { Data = Data, FeatureName = IsEdit ? EditFeature.Name : "(new)" };
+                .Select(s => new ChainInput { Data = s.Data, FeatureName = s.Name, Suppressed = s.Suppressed }).ToList();
+            var mine = new ChainInput { Data = Data, FeatureName = _editName };
             int at = IsEdit ? list.FindIndex(s => s.Data.Id == Data.Id) : -1;
             if (at >= 0 && at <= inputs.Count) inputs.Insert(at, mine); else inputs.Add(mine);
             var anchors = new Dictionary<string, ForeignAnchor>(TubeFeatureStore.ForeignAnchors);
@@ -221,7 +230,7 @@ namespace TubeWorks.AddIn.Pmp
         {
             var chain = SolveWithCurrent();
             var path = chain.Paths.FirstOrDefault(p => p.FeatureIds.Contains(Data.Id));
-            var issues = TubeValidator.Validate(chain, LibraryStore.Load().RulesFor(Profile))
+            var issues = TubeValidator.Validate(chain, Library.RulesFor(Profile))
                 .Where(i => i.FeatureId == Data.Id || (path != null && i.FeatureId == path.RootId && i.Code == "CLAMP")).ToList();
             warnings = issues.Count == 0 ? "No manufacturing warnings." : string.Join("\n", issues.Select(i => i.ToString()));
             return path == null ? "Total developed length: (tube has an error)" : "Total developed length: " + SwUtil.FormatLength(Model, path.DevelopedLength);

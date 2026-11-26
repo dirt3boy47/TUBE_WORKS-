@@ -2,7 +2,7 @@
 
 ## A. Automated (no SOLIDWORKS)
 
-`dotnet test tests/TubeWorks.Geometry.Tests` — 36 tests, all pass in the build environment. Expected values are closed-form hand calculations, not engine output.
+`dotnet test tests/TubeWorks.Geometry.Tests` — 43 tests, all pass in the build environment. Expected values are closed-form hand calculations, not engine output.
 
 | Acceptance case | Test |
 |---|---|
@@ -25,6 +25,10 @@
 | Surface development | `Unwrap_Width_AndExactMapping`, `Unwrap_HoleCrossingSeam_IsSplitIntoTwoPieces_AtBothEdges`, `Unwrap_EndCircle_IsRecognisedAsPlainEnd`, `Unwrap_InteriorFaceBoundaryCircle_IsIgnored_AndMergeCollinearJoinsStraights` |
 | 1:1 DXF pattern | `Dxf_IsWellFormed_AndUsesLayersAndMillimetres`; the file is also checked independently with ezdxf (`tools/check_dxf.py`): AC1009, 0 audit errors, extents 410.8997 × 78.5398 mm = developed length × π·OD |
 | Library | `Library_CsvAndXmlRoundTrip_AndChecks`, `Codec_UnbendFields` |
+| Unbend with any fixed segment (bug in 0.2.1, fixed in 0.2.2) | `Unbend_AnyFixedSegment_IsContinuousAndKeepsLength` (fails on 0.2.1 for a fixed segment after a bend) |
+| Approximate mapping of points in bends | `MapPoint_ExactInStraights_ContinuousAcrossBends_AndArcLengthInBends` |
+| Tooling, stock, cut distance checks | `Validator_ToolingStockAndCutDistance` |
+| DXF clean-up and true circles | `Pattern_Simplify_RemovesCollinearPoints_AndFindsTrueCircles_Only` |
 
 Also automated: the add-in compiles against the SOLIDWORKS 2026 interop (CI workflow).
 
@@ -69,4 +73,12 @@ Use a new part in mm. Record pass/fail and the SOLIDWORKS version. On any failur
 | LIB-1 | Tube Library: add a preset, save, close, reopen; export CSV; import it into an empty library | Values identical; invalid wall (≥ OD/2) refused on save |
 | MC-3 | Manufacturing Check with a hole in a bend | Warning "Feature in a bend region …" |
 
-Not covered yet (planned): automatic drawings; DWG; engraving detection.
+| FB-9 | (crash in 0.2.1) Base Tube → Face Bend OK → Face Bend again on the new end face; change values in all boxes | No crash; preview follows |
+| UB-5 | Unbend with the LAST straight fixed (0.2.1 bug) | Bent part unchanged; the straightened part is continuous and its total length equals the developed length |
+| ENG-1 | Shallow extruded cut (0.3 mm deep text or mark) on a straight, then Unwrap | Outline on ENGRAVING layer, not INTERNAL_CUTOUTS |
+| UW-3 | Hole in a bend, then Unwrap | Outline present, listed as APPROXIMATE |
+| FP-4 | Flatten a two-bend tube | Lines (split edges) on the blank at the bend start and finish positions of the bend table |
+| TL-1 | Library preset with radii 38.1 and 50.8; Face Bend on that tube | Radius list offers both; choosing one sets the CLR; a radius not in the list gives a NO_TOOLING warning in Manufacturing Check |
+| DRW-1 | Save the part; Tube Drawing, A3, first angle | Drawing with 2 sheets: 4 views + centreline + bend table + notes; sheet 2 straightened view (TW Straight) + developed surface |
+| DWG-1 | Unwrap → Export DWG… | DWG opens in a DWG viewer at 1:1 mm with the TubeWorks layer names |
+| RB-2 | Unbend with a hole in a bend; save, close, reopen; edit a cut between Unbend and Rebend | Rebend rebuilds without the "Ctrl+Q" error (when SOLIDWORKS provides the Unbend input body) |

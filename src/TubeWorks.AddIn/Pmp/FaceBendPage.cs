@@ -284,7 +284,7 @@ namespace TubeWorks.AddIn.Pmp
                 var t = Start.Value.Tangent;
                 _axis.Caption = $"Tube axis: ({t.X:0.###}, {t.Y:0.###}, {t.Z:0.###})";
                 _attach.Caption = AttachText;
-                var preset = LibraryStore.Load().Match(Profile);
+                var preset = Library.Match(Profile);
                 if (!ReferenceEquals(_toolingFor, Profile))
                 {
                     _toolingFor = Profile;

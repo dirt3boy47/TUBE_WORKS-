@@ -31,7 +31,7 @@ namespace TubeWorks.AddIn.Sw
             {
                 Features = all, Path = path, Math = (IMathUtility)app.GetMathUtility(),
                 Builder = new BodyBuilder(app) { VerifyGeometry = UserSettings.Current.VerifyGeometry },
-                Name = id => all.FirstOrDefault(x => x.Data.Id == id)?.Feature.Name ?? id,
+                Name = id => all.FirstOrDefault(x => x.Data.Id == id)?.Name ?? id,
             };
             var u = TubeUnbender.ForFeature(path, null);
             var rep = new TransferReport();

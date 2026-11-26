@@ -29,10 +29,10 @@ namespace TubeWorks.AddIn.Features
             return all.Where(x => x.Data.Kind == TubeFeatureKind.Unbend && !x.Suppressed && !closed.Contains(x.Data.Id)).ToList();
         }
 
-        internal static Context Prepare(ISldWorks sw, IModelDoc2 model, IFeature feat, string rootId, out string error)
+        internal static Context Prepare(ISldWorks sw, IModelDoc2 model, string stopAfterId, string rootId, out string error)
         {
             error = null;
-            var list = TubeFeatureStore.Scan(model, feat.Name);
+            var list = TubeFeatureStore.Scan(model, stopAfterId);
             var chain = TubeFeatureStore.Solve(list);
             var path = chain.Paths.FirstOrDefault(p => p.RootId == rootId);
             if (path == null) { error = "the tube was not found or has an error."; return null; }
@@ -41,7 +41,7 @@ namespace TubeWorks.AddIn.Features
             {
                 Features = list, Path = path, Math = (IMathUtility)sw.GetMathUtility(),
                 Builder = new BodyBuilder(sw) { VerifyGeometry = UserSettings.Current.VerifyGeometry },
-                Name = id => list.FirstOrDefault(x => x.Data.Id == id)?.Feature.Name ?? id,
+                Name = id => list.FirstOrDefault(x => x.Data.Id == id)?.Name ?? id,
             };
         }
 
@@ -98,7 +98,7 @@ namespace TubeWorks.AddIn.Features
     {
         protected internal override object RegenerateCore(ISldWorks sw, IModelDoc2 model, IFeature feat, IMacroFeatureData md, TubeFeatureData me)
         {
-            var c = Prepare(sw, model, feat, me.ParentId, out string err);
+            var c = Prepare(sw, model, me.Id, me.ParentId, out string err);
             if (c == null) return "TubeWorks Unbend: " + err;
             if (ActiveUnbends(c.Features.Where(x => x.Data.Id != me.Id)).Any())
                 return "TubeWorks Unbend: an earlier Unbend is still active. Add a Rebend before this Unbend.";
@@ -131,7 +131,7 @@ namespace TubeWorks.AddIn.Features
     {
         protected internal override object RegenerateCore(ISldWorks sw, IModelDoc2 model, IFeature feat, IMacroFeatureData md, TubeFeatureData me)
         {
-            var list = TubeFeatureStore.Scan(model, feat.Name);
+            var list = TubeFeatureStore.Scan(model, me.Id);
             var unbend = list.FirstOrDefault(x => x.Data.Id == me.ParentId);
             if (unbend == null) return "TubeWorks Rebend: its Unbend feature is missing.";
             if (unbend.Suppressed) return "TubeWorks Rebend: its Unbend feature is suppressed.";
@@ -140,7 +140,7 @@ namespace TubeWorks.AddIn.Features
             if (held == null)
                 return "TubeWorks Rebend: rebuild the whole part (Ctrl+Q) so that the Unbend data is available.";
 
-            var c = Prepare(sw, model, feat, unbend.Data.ParentId, out string err);
+            var c = Prepare(sw, model, me.Id, unbend.Data.ParentId, out string err);
             if (c == null) return "TubeWorks Rebend: " + err;
             UnbendResult u;
             try { u = TubeUnbender.ForFeature(c.Path, unbend.Data); }
@@ -187,7 +187,7 @@ namespace TubeWorks.AddIn.Features
             {
                 var bentInput = SwUtil.Arr<IBody2>((object)unbend.Definition.EditBodies).FirstOrDefault();
                 if (bentInput == null) return null;
-                var c = Prepare(sw, model, feat, unbend.Data.ParentId, out string _);
+                var c = Prepare(sw, model, unbend.Data.Id, unbend.Data.ParentId, out string _);
                 if (c == null) return null;
                 var u = TubeUnbender.ForFeature(c.Path, unbend.Data);
                 var nominalBent = c.Builder.Build(c.Path.Primitives, c.Path.Profile, out string _);
@@ -213,13 +213,21 @@ namespace TubeWorks.AddIn.Features
     {
         protected internal override object RegenerateCore(ISldWorks sw, IModelDoc2 model, IFeature feat, IMacroFeatureData md, TubeFeatureData me)
         {
-            var c = Prepare(sw, model, feat, me.ParentId, out string err);
+            var c = Prepare(sw, model, me.Id, me.ParentId, out string err);
             if (c == null) return "TubeWorks Flat Pattern: " + err;
             if (ActiveUnbends(c.Features).Any()) return "TubeWorks Flat Pattern: an Unbend is active. Add a Rebend first.";
             var u = TubeUnbender.ForFeature(c.Path, null);
             var rep = new TransferReport();
             var body = BentToUnbent(c, u, SwUtil.Arr<IBody2>((object)md.EditBodies).FirstOrDefault(), rep, null, out err);
             if (body == null) return "TubeWorks Flat Pattern: " + err;
+            // Bend start and finish lines on the blank.
+            var up = u.UnbentPath;
+            var marks = TubeUnbender.Marks(u, up[0].StartPoint, up[0].StartTangent, null);
+            if (marks.Count > 0)
+            {
+                int rings = c.Builder.ImprintRings(body, up[0].StartPoint, up[0].StartTangent, marks.SelectMany(m => new[] { m.StartS, m.EndS }).Distinct(), c.Path.Profile.OuterRadius);
+                if (rings == 0) rep.NotTransferred.Add("Bend lines could not be marked on the blank (imprint not available); see the bend table or the unwrapped DXF.");
+            }
             MaterialTransfer.Reports[me.Id] = rep;
             UserIds.Assign(md, body, Solution(me, u.UnbentPath));
             return body;

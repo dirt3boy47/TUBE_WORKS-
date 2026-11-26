@@ -1,12 +1,12 @@
 # TubeWorks Designer — technical design
 
-Release 0.2.0 (Phase 1 and the first part of Phase 2). This document contains the 8 deliverables that the specification asks for before the full application.
+Release 0.3.0 (Phase 1 and Phase 2). This document contains the 8 deliverables that the specification asks for before the full application.
 
 **Verification status, stated once for the whole document:**
 
 | What | Status |
 |---|---|
-| Geometry engine (`TubeWorks.Geometry`) | 36 automated tests pass. Expected values come from closed-form hand calculations. The DXF output is also checked independently with ezdxf. |
+| Geometry engine (`TubeWorks.Geometry`) | 43 automated tests pass. Expected values come from closed-form hand calculations. The DXF output is also checked independently with ezdxf. |
 | Add-in compile against SOLIDWORKS 2026 interop (34.1.1.11) | Compiles: 0 errors, 0 warnings. So every API member that the add-in uses exists with the signature that it uses. |
 | Add-in compile against SOLIDWORKS 2016 interop (24.4) | Compiles: 0 errors, 0 warnings (since 0.2.0 the add-in uses `IBody2.Copy` and `SaveAs`). The setup program is built from this. |
 | Setup program (`TubeWorksSetup-0.2.0.exe`, NSIS) | Built; contents checked (42 files, no interop assemblies). Not run on Windows. |
@@ -144,10 +144,10 @@ The start tangent is never changed, so every bend is tangent-continuous by const
 
 | Phase | Content | Status |
 |---|---|---|
-| 1 (MVP) | Base Tube; existing-tube face recognition; Face Bend (radius/angle, plane rotation, reverse, straight after); XYZ end-point and direction solving with conflict handling; plane/axis alignment; Straight Extension (blind, up to point, up to plane); sequential bends; parametric editing and reference recovery; Flatten Tube (straight blank); STEP/Parasolid/SLDPRT export; bend table (CSV, XYZ, LRA); Tube Properties; basic Manufacturing Check | **Implemented in this repository, compile-verified, not yet tested in SOLIDWORKS** |
+| 1 (MVP) | Base Tube; existing-tube face recognition; Face Bend (radius/angle, plane rotation, reverse, straight after); XYZ end-point and direction solving with conflict handling; plane/axis alignment; Straight Extension (blind, up to point, up to plane); sequential bends; parametric editing and reference recovery; Flatten Tube (straight blank); STEP/Parasolid/SLDPRT export; bend table (CSV, XYZ, LRA); Tube Properties; basic Manufacturing Check | **Implemented; 0.2.1 used in SOLIDWORKS 2026 SP4 by the owner (most commands worked; one Face Bend crash, addressed in 0.3.0)** |
 | 1b | Run `TEST-PLAN.md` in SOLIDWORKS; fix runtime issues; macro feature display dimensions; Multi Bend | Next |
-| 2a | Individual unbend/rebend with transfer of cuts; hole and cut-out mapping; Unwrap Tube Surface; DXF with layers; library editor with import/export; validation of cuts in bends; setup program | **Implemented in 0.2.0, compile-verified, not yet tested in SOLIDWORKS** |
-| 2b | Automatic drawings (views, bend table, A4–A1 templates); engraving detection; DWG decision; mapping of cuts inside bends (approximate, flagged) | Next |
+| 2a | Individual unbend/rebend with transfer of cuts; hole and cut-out mapping; Unwrap Tube Surface; DXF with layers; library editor with import/export; validation of cuts in bends; setup program | **Implemented in 0.2.0; Unbend/Flatten/Rebend ran in SOLIDWORKS 2026 SP4; Unbend bug with a fixed segment after a bend fixed in 0.2.2** |
+| 2b | Automatic drawings (views, centreline, straightened view, developed surface, bend table, notes, A4–A1, ISO first angle); engraving layer; DWG through SOLIDWORKS; approximate outlines of cuts in bends (flagged); tooling radius list; stock, tooling and cut-distance checks; bend lines on the blank; Rebend recovery after reopening; Unbend page cut preview | **Implemented in 0.3.0, compile-verified, not yet run in SOLIDWORKS** |
 | 3 | Machine postprocessors; springback and stretch compensation from calibration data; stock optimisation; nesting; cost; batch; reports | Planned |
 
 ## 8. Technical risks and limitations
@@ -201,3 +201,23 @@ lines, an "inside of bend" mark at the bend direction angle, and a label (number
 
 **DXF.** ASCII R12 (AC1009), LTYPE and LAYER tables, LINE/POLYLINE/TEXT, coordinates in mm (or inch) at 1:1. Layer names and
 colours are configurable.
+
+## Phase 2b design notes (release 0.3)
+
+**Approximate development of cuts in bends.** A point inside a straightened bend keeps its cross-section offset and its centreline arc
+length (`TubeUnbender.MapPoint`). This is the usual neutral-axis bending model; the real outside of a bend stretches and the inside
+compresses, so such outlines are flagged APPROXIMATE everywhere they appear. Continuity with the rigid motion of the neighbouring
+straights is tested at both ends of the bend.
+
+**Engraving.** A cut is "through" when its edges reach the bore radius; otherwise it is engraving and goes to the ENGRAVING layer.
+
+**Drawings.** Views are standard model views (`CreateDrawViewFromModelView3`) placed in a first-angle (ISO) or third-angle layout,
+scaled with ISO 5455 preferred scales. The straightened view references the configuration *TW Straight*, in which only the Tube
+Flat Pattern is unsuppressed. The centreline view and the developed surface are sheet sketches drawn by TubeWorks; the bend table is a
+general table. Dimensions are delivered as table and notes; driven drawing dimensions are not generated.
+
+**DWG.** No DWG library is used. The developed surface is drawn at 1:1 on a temporary drawing sheet with the TubeWorks layer names and
+saved with the SOLIDWORKS DWG translator; the temporary drawing is closed without saving.
+
+**Crash fix (0.3.0).** SOLIDWORKS 2026 SP4 closed with an access violation inside `IFeature.Name` while a Face Bend page refreshed.
+Since 0.3.0 the pages read the feature tree once (names stored as text) and rebuilds never read names of other features.

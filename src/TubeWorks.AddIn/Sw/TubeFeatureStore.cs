@@ -32,6 +32,8 @@ namespace TubeWorks.AddIn.Sw
         public IMacroFeatureData Definition;
         public TubeFeatureData Data;
         public bool Suppressed;
+        /// <summary>Feature name, read once when the tree is scanned (only for TubeWorks features).</summary>
+        public string Name = "";
     }
 
     /// <summary>Reads and writes TubeWorks parameters stored in macro features, and solves the tube chain of a part.</summary>
@@ -58,13 +60,17 @@ namespace TubeWorks.AddIn.Sw
                 if (f == null || f.GetTypeName2() != "MacroFeature") return null;
                 var md = f.GetDefinition() as IMacroFeatureData;
                 if (md == null || !ProgIds.IsOurs(md.GetProgId())) return null;
-                return new StoredFeature { Feature = f, Definition = md, Data = Read(md), Suppressed = SwUtil.IsSuppressed(f) };
+                return new StoredFeature { Feature = f, Definition = md, Data = Read(md), Suppressed = SwUtil.IsSuppressed(f), Name = f.Name ?? "" };
             }
             catch { return null; }
         }
 
-        /// <summary>All TubeWorks features in tree order. When <paramref name="stopAfterName"/> is given, scanning stops after that feature.</summary>
-        public static List<StoredFeature> Scan(IModelDoc2 model, string stopAfterName = null)
+        /// <summary>
+        /// All TubeWorks features in tree order. When <paramref name="stopAfterId"/> is given, scanning stops after the
+        /// TubeWorks feature with that Id. Only TubeWorks features are asked for their name: other features are only
+        /// tested for their type, which keeps API calls on foreign features to a minimum.
+        /// </summary>
+        public static List<StoredFeature> Scan(IModelDoc2 model, string stopAfterId = null)
         {
             var list = new List<StoredFeature>();
             var f = model.FirstFeature() as IFeature;
@@ -72,7 +78,7 @@ namespace TubeWorks.AddIn.Sw
             {
                 var s = TryRead(f);
                 if (s != null) list.Add(s);
-                if (stopAfterName != null && f.Name == stopAfterName) break;
+                if (stopAfterId != null && s != null && s.Data.Id == stopAfterId) break;
                 f = f.GetNextFeature() as IFeature;
             }
             return list;
@@ -80,7 +86,7 @@ namespace TubeWorks.AddIn.Sw
 
         public static ChainResult Solve(IEnumerable<StoredFeature> features) =>
             TubeChainSolver.Solve(
-                features.Select(s => new ChainInput { Data = s.Data, FeatureName = s.Feature.Name, Suppressed = s.Suppressed }).ToList(),
+                features.Select(s => new ChainInput { Data = s.Data, FeatureName = s.Name, Suppressed = s.Suppressed }).ToList(),
                 ForeignAnchors);
 
         public static ChainResult Solve(IModelDoc2 model) => Solve(Scan(model));
@@ -93,7 +99,7 @@ namespace TubeWorks.AddIn.Sw
             string stem = kind == TubeFeatureKind.BaseTube ? "Base Tube" : kind == TubeFeatureKind.Straight ? "Straight" : kind == TubeFeatureKind.Bend ? "Bend"
                 : kind == TubeFeatureKind.Unbend ? "Tube Unbend" : kind == TubeFeatureKind.Rebend ? "Tube Rebend" : "Tube Flat Pattern";
             if (kind == TubeFeatureKind.FlatPattern) return stem;
-            var names = new HashSet<string>(Scan(model).Select(s => s.Feature.Name), StringComparer.OrdinalIgnoreCase);
+            var names = new HashSet<string>(Scan(model).Select(s => s.Name), StringComparer.OrdinalIgnoreCase);
             if (kind == TubeFeatureKind.BaseTube && !names.Contains(stem)) return stem;
             for (int i = 1; ; i++)
             {
@@ -174,6 +180,15 @@ namespace TubeWorks.AddIn.Sw
                 if (b != null) return b;
             }
             return null;
+        }
+
+        /// <summary>Insert the Tube Flat Pattern for a tube (it always stays at the end of the tree).</summary>
+        public static IFeature InsertFlatPattern(IModelDoc2 model, IReadOnlyList<StoredFeature> all, TubePath path)
+        {
+            var body = TubeBody(all, path);
+            if (body == null) return null;
+            model.ClearSelection2(true);
+            return Insert(model, new TubeFeatureData { Kind = TubeFeatureKind.FlatPattern, ParentId = path.RootId }, body, "Tube Flat Pattern");
         }
 
         /// <summary>Suppress the flat pattern (return to the bent state). Returns true when it was unsuppressed before.</summary>

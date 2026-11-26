@@ -1,4 +1,4 @@
-# User guide (release 0.2)
+# User guide (release 0.3)
 
 ## Basic workflow
 
@@ -9,7 +9,7 @@ Select face → Face Bend → drag or type → OK → (the new end face is selec
 | Command | What it does |
 |---|---|
 | **Base Tube** | Straight circular hollow tube. Enter OD and either wall thickness or ID (the other value is calculated), length, optional material and preset. Placement: start X/Y/Z and axis (±X, ±Y, ±Z, or the normal of a selected plane or planar face). |
-| **Face Bend** | Select the flat end face of any circular hollow tube (TubeWorks or not). The add-in detects OD, ID, wall, centre and axis. |
+| **Face Bend** | Select the flat end face of any circular hollow tube (TubeWorks or not). The add-in detects OD, ID, wall, centre and axis. If the tube library has a preset for this tube, the tooling radii are offered in a list. |
 | **Straight Extension** | Extends a tube end: blind length (drag the arrow), up to a point/vertex, or up to a plane/planar face. |
 | **Edit Bend** | Select a TubeWorks feature (tree or face) to edit it. Double-click / Edit Feature in the tree does the same. |
 | **Reverse Bend** | Bends the selected bend to the opposite side. |
@@ -17,7 +17,8 @@ Select face → Face Bend → drag or type → OK → (the new end face is selec
 | **Unbend** | Straightens one, several or all bends about a fixed straight segment that you choose. Each bend keeps its developed length (R × angle). Add holes, slots and cut-outs after it, then use Rebend. |
 | **Rebend** | Restores the bends of the active Unbend. Cuts made while straight go back to the bent tube. |
 | **Flatten Tube** | First use: creates **Tube Flat Pattern** at the end of the tree (straight blank of the developed length, with the cuts of the straight segments). Later uses: switch between bent and straight. New bends switch back to the bent state automatically. |
-| **Unwrap Tube Surface** | Develops the outside, inside or neutral surface of the straightened tube into a rectangle (width = π × reference diameter) and writes a 1:1 DXF (mm or inch) with layers for the outer profile, cut-outs, bend lines, centreline, engraving, construction and text. Choose the seam angle. The model is not changed. |
+| **Unwrap Tube Surface** | Export DXF (written by TubeWorks) or DWG (drawn on a 1:1 drawing sheet and saved by SOLIDWORKS, in mm). Develops the outside, inside or neutral surface of the straightened tube into a rectangle (width = π × reference diameter) and writes a 1:1 DXF (mm or inch) with layers for the outer profile, cut-outs, bend lines, centreline, engraving, construction and text. Choose the seam angle. The model is not changed. |
+| **Tube Drawing** | Creates a drawing (A4, A3, A2 or A1; first or third angle) from your drawing template. Sheet 1: front, top, right and isometric views, a centreline sketch with bend numbers, the bend table and notes (OD, wall, ID, material, required stock length, envelope, scale). Sheet 2: the straightened tube (configuration **TW Straight**, added to the part) and the developed surface. The part must be saved. Dimensions are given as table and notes, not as driven dimensions; add dimensions you need by hand. |
 | **Tube Library** | Edit presets (OD, wall, material, stock lengths, tooling radii, limits, calibration values). Import and export CSV or XML. |
 | **Export Flat Pattern** | Bent or straight tube to STEP, Parasolid or a SOLIDWORKS part copy (native translators, 1:1); centreline XYZ to CSV. |
 | **Bend Table** | Bend number, feed, CLR, angle, rotation, direction, start/finish XYZ, developed bend, cumulative length. Choose mm/in, rotation sign, bend/included angle. Export full CSV, XYZ or LRA. Write custom properties. |
@@ -52,7 +53,10 @@ TubeWorks compares the actual tube with the nominal tube made from the feature p
 - Material added to the tube (bosses, welds) is not transferred and is reported.
 - The unwrapped surface is exact for cuts that were transferred exactly (a cylinder is developable). The neutral-surface option places
   outlines of the outside surface on the mean diameter by angle; this is exact for radial cuts only and is reported as approximate.
-- Engraving: the ENGRAVING layer exists in the DXF but is not filled yet; all cut outlines go to INTERNAL_CUTOUTS.
+- Engraving: a cut that does not reach the bore (marking, engraving, shallow pocket) goes to the ENGRAVING layer; through cuts go to INTERNAL_CUTOUTS.
+- Cuts in a bend appear in the unwrapped pattern as **approximate** outlines, placed with the centreline bending model (each one is listed as APPROXIMATE). They are not moved by Unbend or Flatten.
+- Round holes drilled radially through a tube do not develop to circles (they are longer around the tube). The DXF writes true circles only where the outline really is a circle; other outlines are polylines with collinear points removed.
+- Flatten Tube marks the bend start and finish lines on the blank's outside face.
 
 After Ctrl+Q or reopening, run Ctrl+Q once before you edit a Rebend, so that the Unbend data is available.
 

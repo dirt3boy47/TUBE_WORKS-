@@ -22,7 +22,7 @@ RED = (200, 40, 40, 255)
 
 # Order must match TubeWorksAddIn.Commands.
 COMMANDS = ["base", "bend", "straight", "edit", "reverse", "multi", "plane", "trim", "notch",
-            "unbend", "rebend", "flatten", "unwrap", "export", "table", "props", "check", "library"]
+            "unbend", "rebend", "flatten", "unwrap", "export", "table", "props", "check", "library", "drawing"]
 PLANNED = {"multi", "trim", "notch"}
 
 
@@ -91,6 +91,10 @@ def draw(name):
         for i, x in enumerate((18, 46, 74)):
             d.rectangle([x, 20, x + 22, 110], outline=DARK, width=6)
         d.line([(100, 24), (118, 108)], fill=c, width=14)
+    elif name == "drawing":
+        d.rectangle([12, 14, 116, 114], outline=DARK, width=6)
+        d.rectangle([76, 90, 116, 114], outline=DARK, width=5)
+        arc(d, 46, 70, 26, 180, 270, 12, c); tube(d, 20, 70, 20, 96, 12, c); tube(d, 46, 44, 72, 44, 12, c)
     elif name == "check":
         tube(d, 14, 90, 70, 90, W, c); d.line([(60, 60), (80, 84), (118, 26)], fill=(40, 160, 60, 255), width=12)
     return img

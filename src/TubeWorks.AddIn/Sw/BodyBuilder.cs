@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
 using TubeWorks.Geometry;
@@ -202,6 +203,45 @@ namespace TubeWorks.AddIn.Sw
                 "Geometry check failed: {0} expected {1:G6} m³, modeler gave {2:G6} m³. The body was not used. " +
                 "Report this with your SOLIDWORKS version. (The check can be switched off in %APPDATA%\\TubeWorks\\settings.xml, VerifyGeometry.)",
                 what, expected, actual);
+
+        /// <summary>
+        /// Mark rings on the outside face of a straight tube body at the given axial positions (bend start and finish
+        /// lines of the blank), by imprinting planar sheets (IModeler.ImprintingFaces). Returns the number of rings made.
+        /// The body geometry does not change; only its outside face is split.
+        /// </summary>
+        public int ImprintRings(IBody2 body, Vec3 origin, Vec3 axis, IEnumerable<double> positions, double outerRadius)
+        {
+            var targets = SwUtil.Arr<IFace2>((object)body.GetFaces()).Where(f =>
+            {
+                var s = f.GetSurface() as ISurface;
+                var cp = s != null && s.IsCylinder() ? SwUtil.D((object)s.CylinderParams) : null;
+                return cp != null && cp.Length >= 7 && Math.Abs(cp[6] - outerRadius) <= Math.Max(1e-7, outerRadius * 1e-6);
+            }).Cast<object>().ToArray();
+            if (targets.Length == 0) return 0;
+            var refDir = new TubeFrame(origin, axis).ReferenceX;
+            double a = outerRadius * 3;
+            var tools = new List<object>();
+            foreach (double s in positions)
+            {
+                Vec3 root = origin + axis * s;
+                var surf = _modeler.CreatePlanarSurface2(root.ToArray(), axis.ToArray(), refDir.ToArray()) as ISurface;
+                if (surf == null) continue;
+                IBody2 sheet = null;
+                foreach (var range in new[] { new[] { -a, a, -a, a }, new[] { -a, -a, a, a } })
+                {
+                    try { sheet = _modeler.CreateSheetFromSurface(surf, range) as IBody2; } catch { sheet = null; }
+                    if (sheet != null) break;
+                }
+                if (sheet != null) tools.AddRange(SwUtil.Arr<IFace2>((object)sheet.GetFaces()));
+            }
+            if (tools.Count == 0) return 0;
+            try
+            {
+                bool ok = _modeler.ImprintingFaces(targets, tools.ToArray(), 0, out object te, out object _, out object _, out object _);
+                return ok ? SwUtil.Arr<IEdge>(te).Length : 0;
+            }
+            catch { return 0; }
+        }
 
         /// <summary>Wire body of the centreline, for preview only.</summary>
         public IBody2 Centreline(IReadOnlyList<PathPrimitive> prims)

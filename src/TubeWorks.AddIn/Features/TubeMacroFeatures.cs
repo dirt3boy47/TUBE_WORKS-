@@ -66,11 +66,11 @@ namespace TubeWorks.AddIn.Features
                 TubeFeatureStore.ForeignAnchors[me.Id] = new ForeignAnchor { Frame = end.Frame, Profile = end.Profile };
             }
 
-            var list = TubeFeatureStore.Scan(model, feat.Name);
+            var list = TubeFeatureStore.Scan(model, me.Id);
             if (StateFeatureBase.ActiveUnbends(list.Where(x => x.Data.Id != me.Id)).Any())
                 return "TubeWorks: this feature is after an active Unbend. Move it below a Rebend.";
             var self = TubeFeatureStore.FindById(list, me.Id);
-            if (self != null) self.Data = me; else list.Add(new StoredFeature { Feature = feat, Definition = md, Data = me });
+            if (self != null) self.Data = me; else list.Add(new StoredFeature { Feature = feat, Definition = md, Data = me, Name = me.Kind.ToString() });
             var chain = TubeFeatureStore.Solve(list);
             var fs = chain.Find(me.Id);
             if (fs == null) return "TubeWorks: the feature could not be solved.";

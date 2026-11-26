@@ -59,6 +59,7 @@ namespace TubeWorks.AddIn
             new Cmd { Name = "Tube Properties", Tip = "Profile, material and developed length", Callback = nameof(OnTubeProperties), Implemented = true },
             new Cmd { Name = "Manufacturing Check", Tip = "Check bend radii, straights, angles, self-intersection and cuts in bends", Callback = nameof(OnManufacturingCheck), Implemented = true },
             new Cmd { Name = "Tube Library", Tip = "Edit tube presets, tooling radii and limits; import and export", Callback = nameof(OnLibrary), Implemented = true },
+            new Cmd { Name = "Tube Drawing", Tip = "Manufacturing drawing: views, centreline, straightened tube, developed surface, bend table (A4–A1)", Callback = nameof(OnDrawing), Implemented = true },
         };
 
         // ------------------------------------------------------------------ ISwAddin
@@ -211,6 +212,8 @@ namespace TubeWorks.AddIn
             else UnbendPage.ShowReport(App, m, data.Id, "Rebend");
         });
 
+        public void OnDrawing() => Run("Tube Drawing", m => DrawingForm.ShowFor(App, m));
+
         public void OnUnwrap() => Run("Unwrap Tube Surface", m => UnwrapForm.ShowFor(App, m));
 
         public void OnLibrary() { try { LibraryForm.ShowFor(App); } catch (Exception ex) { Log.Error("Library", ex); SwUtil.Message(App, ex.Message, swMessageBoxIcon_e.swMbStop); } }
@@ -274,13 +277,9 @@ namespace TubeWorks.AddIn
             var chain = TubeFeatureStore.Solve(all);
             var path = chain.Paths.FirstOrDefault(p => p.RootIsBaseTube);
             if (path == null) { SwUtil.Message(App, "Flatten Tube needs a valid tube that starts with a Base Tube feature."); return; }
-            var body = TubeFeatureStore.TubeBody(all, path);
-            if (body == null) { SwUtil.Message(App, "The tube body was not found."); return; }
-            m.ClearSelection2(true);
-            var data = new TubeFeatureData { Kind = TubeFeatureKind.FlatPattern, ParentId = path.RootId };
-            if (TubeFeatureStore.Insert(m, data, body, "Tube Flat Pattern") == null)
-                SwUtil.Message(App, "SOLIDWORKS could not create the Tube Flat Pattern feature.", swMessageBoxIcon_e.swMbStop);
-            else UnbendPage.ShowReport(App, m, data.Id, "Flat Pattern");
+            var f = TubeFeatureStore.InsertFlatPattern(m, all, path);
+            if (f == null) SwUtil.Message(App, "SOLIDWORKS could not create the Tube Flat Pattern feature.", swMessageBoxIcon_e.swMbStop);
+            else { var s = TubeFeatureStore.TryRead(f); if (s != null) UnbendPage.ShowReport(App, m, s.Data.Id, "Flat Pattern"); }
         });
 
         public void OnExport() => Run("Export", m => ExportForm.ShowFor(App, m));
@@ -339,7 +338,7 @@ namespace TubeWorks.AddIn
                 {
                     var actual = TubeFeatureStore.TubeBody(all, path);
                     var u = TubeUnbender.ForFeature(path, null);
-                    var cuts = CutAnalysis.Analyze(builder, path, u, actual, id => all.FirstOrDefault(x => x.Data.Id == id)?.Feature.Name ?? id, out bool _, out string _);
+                    var cuts = CutAnalysis.Analyze(builder, path, u, actual, id => all.FirstOrDefault(x => x.Data.Id == id)?.Name ?? id, out bool _, out string _);
                     if (cuts == null) continue;
                     list.AddRange(TubeValidator.ValidateCuts(path, cuts.Select(c => new CutRange(c.S0, c.S1, c.Description)), lib.RulesFor(path.Profile)));
                 }

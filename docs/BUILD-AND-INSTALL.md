@@ -3,7 +3,7 @@
 ## Install with the setup program (recommended)
 
 1. Close SOLIDWORKS.
-2. Run `TubeWorksSetup-0.2.1.exe`. Windows asks for administrator rights.
+2. Run `TubeWorksSetup-0.3.0.exe`. Windows asks for administrator rights.
    The setup program is not code-signed, so Windows SmartScreen can show "Windows protected your PC": click **More info > Run anyway**
    only if you got the file from your own build or CI. (Signing needs your organisation's code-signing certificate.)
 3. The setup program checks 64-bit Windows, .NET Framework 4.8 and that SOLIDWORKS is closed; copies the files to
@@ -11,7 +11,7 @@
    *Settings > Apps* with an uninstaller and Start-menu entries (Documentation, Uninstall).
 4. Start SOLIDWORKS and open a part: the **Tube Design** tab appears. If not: **Tools > Add-Ins**, tick TubeWorks Designer.
 
-Silent install / uninstall (for IT deployment): `TubeWorksSetup-0.2.1.exe /S`, `"C:\Program Files\TubeWorks Designer\Uninstall.exe" /S`.
+Silent install / uninstall (for IT deployment): `TubeWorksSetup-0.3.0.exe /S`, `"C:\Program Files\TubeWorks Designer\Uninstall.exe" /S`.
 
 **SOLIDWORKS version.** Since 0.2.1 the SOLIDWORKS interface definitions are embedded in `TubeWorks.AddIn.dll`
 (Embed Interop Types). The DLL references no SOLIDWORKS assembly, so it does not depend on the SOLIDWORKS version for loading
