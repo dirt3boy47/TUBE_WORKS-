@@ -22,7 +22,7 @@ RED = (200, 40, 40, 255)
 
 # Order must match TubeWorksAddIn.Commands.
 COMMANDS = ["base", "bend", "straight", "edit", "reverse", "multi", "plane", "trim", "notch",
-            "unbend", "rebend", "flatten", "unwrap", "export", "table", "props", "check", "library", "cnc", "report", "batch", "drawing"]
+            "unbend", "rebend", "flatten", "unwrap", "export", "table", "props", "check", "library", "cnc", "report", "batch", "guide", "drawing"]
 PLANNED = {"multi", "trim", "notch"}
 
 
@@ -104,6 +104,13 @@ def draw(name):
         for k in range(3):
             d.rectangle([14 + k * 14, 14 + k * 14, 84 + k * 14, 84 + k * 14], outline=DARK, fill=(255, 255, 255, 255), width=6)
         tube(d, 50, 96, 110, 96, 12, c)
+    elif name == "guide":
+        d.rectangle([8, 52, 120, 76], outline=DARK, width=5)
+        d.rectangle([40, 54, 62, 74], fill=RED)
+        d.rectangle([84, 54, 100, 74], fill=RED)
+        for x in (40, 84):
+            d.line([(x, 34), (x, 94)], fill=RED, width=5)
+        d.line([(8, 108), (120, 108)], fill=DARK, width=4)
     elif name == "drawing":
         d.rectangle([12, 14, 116, 114], outline=DARK, width=6)
         d.rectangle([76, 90, 116, 114], outline=DARK, width=5)

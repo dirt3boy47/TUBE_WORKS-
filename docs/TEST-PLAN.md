@@ -2,7 +2,7 @@
 
 ## A. Automated (no SOLIDWORKS)
 
-`dotnet test tests/TubeWorks.Geometry.Tests` — 51 tests, all pass in the build environment. Expected values are closed-form hand calculations, not engine output.
+`dotnet test tests/TubeWorks.Geometry.Tests` — 55 tests, all pass in the build environment. Expected values are closed-form hand calculations, not engine output.
 
 | Acceptance case | Test |
 |---|---|
@@ -91,4 +91,5 @@ Use a new part in mm. Record pass/fail and the SOLIDWORKS version. On any failur
 | REP-1 | Production Settings: hourly rate, times; library stock 6000 mm with price; Manufacturing Report, quantity 20 | HTML opens; cost lines only for defined items; nest uses 6000 mm bars |
 | BAT-1 | Folder with 3 TubeWorks parts and 1 non-tube part; Batch & Nesting with all outputs | Output folder with CNC, DXF, STEP, CSV per tube part; the non-tube part listed as not processed; one combined report with a nest per tube size |
 | DRW-2 | Sheet 2 of DRW-1 | Bending layout bar as long as the cut length; marks at the bend starts (for the screenshot tube: 50.0 and 128.5 mm); labels with rotate and bend angle; sequence table; the centreline sketch on sheet 1 is at its label, not shrunk; tables and notes in the default colour |
+| GUIDE-1 | Bending Guide on a 2-bend tube with a 35° turn; bend a test piece by following the steps | Marks at the bend starts from S; second bend lands 35° clockwise from the first (seen from S); finished part matches the model |
 | RB-2 | Unbend with a hole in a bend; save, close, reopen; edit a cut between Unbend and Rebend | Rebend rebuilds without the "Ctrl+Q" error (when SOLIDWORKS provides the Unbend input body) |

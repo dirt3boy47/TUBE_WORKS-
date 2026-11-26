@@ -29,8 +29,8 @@ namespace TubeWorks.AddIn.Sw
         public static readonly Dictionary<PatternLayer, int> Colours = new Dictionary<PatternLayer, int>
         {
             // COLORREF 0x00BBGGRR
-            [PatternLayer.OuterProfile] = 0x000000, [PatternLayer.InternalCutouts] = 0x0000FF, [PatternLayer.BendLines] = 0x00A000,
-            [PatternLayer.Centreline] = 0xC0C000, [PatternLayer.Engraving] = 0xC000C0, [PatternLayer.Construction] = 0x808080, [PatternLayer.Text] = 0x0080C0,
+            [PatternLayer.OuterProfile] = 0x000000, [PatternLayer.InternalCutouts] = 0x0080FF, [PatternLayer.BendLines] = 0x2A2AD0,
+            [PatternLayer.Centreline] = 0xC85624, [PatternLayer.Engraving] = 0xC000C0, [PatternLayer.Construction] = 0x808080, [PatternLayer.Text] = 0x0080C0,
         };
 
         public static void EnsureLayers(IModelDoc2 drawing, DxfLayerSettings names)

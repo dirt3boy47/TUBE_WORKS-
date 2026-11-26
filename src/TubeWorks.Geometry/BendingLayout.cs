@@ -70,6 +70,15 @@ namespace TubeWorks.Geometry
                 p.Texts.Add(new PatternText { Layer = PatternLayer.Text, At = new Point2(x - h * 0.3, yb - tick * 0.6 - h * (1.2 + rowOffset)), Height = h, RotationDeg = 0, Text = text });
             }
             Ord(0, "0", 0);
+            // Centreline: straights on the centreline layer (blue), bend zones on the bend layer (red).
+            double prev = 0, yc = od / 2;
+            foreach (var st in steps)
+            {
+                if (st.MarkStart > prev) p.Line(PatternLayer.Centreline, prev, yc, st.MarkStart, yc);
+                p.Line(PatternLayer.BendLines, st.MarkStart, yc, st.MarkStart + st.BendLength, yc);
+                prev = st.MarkStart + st.BendLength;
+            }
+            if (len > prev) p.Line(PatternLayer.Centreline, prev, yc, len, yc);
             foreach (var st in steps)
             {
                 p.Line(PatternLayer.BendLines, st.MarkStart, -tick * 0.3, st.MarkStart, od + tick * 0.3);

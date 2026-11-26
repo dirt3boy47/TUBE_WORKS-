@@ -209,3 +209,59 @@ namespace TubeWorks.Geometry.Tests
         }
     }
 }
+
+namespace TubeWorks.Geometry.Tests
+{
+    public class BendingGuideTests
+    {
+        static BendTable ScreenshotTube(double rotDeg)
+        {
+            var b = new TubeFeatureData { Kind = TubeFeatureKind.BaseTube, OuterDiameter = 0.065, WallThickness = 0.002, Axis = Vec3.UnitX, Length = 0.05 };
+            var b1 = new TubeFeatureData { Kind = TubeFeatureKind.Bend, ParentId = b.Id, BendRadius = 0.1, BendAngle = Math.PI / 4, StraightAfter = 0.05 };
+            var b2 = new TubeFeatureData { Kind = TubeFeatureKind.Bend, ParentId = b1.Id, BendRadius = 0.1, BendAngle = Math.PI / 4, PlaneRotation = rotDeg * Math.PI / 180, StraightAfter = 0.05 };
+            var r = TubeChainSolver.Solve(new[] { b, b1, b2 }.Select(d => new ChainInput { Data = d }).ToList());
+            return BendTable.Build(r.Paths[0].Primitives);
+        }
+
+        [Fact]
+        public void Svg_IsWellFormed_AndHasColouredZonesMarksAndLabels()
+        {
+            var t = ScreenshotTube(35);
+            string svg = BendingGuide.Svg(t, null, TubeProfile.FromOdWall(0.065, 0.002));
+            var x = System.Xml.Linq.XDocument.Parse(svg); // throws when not well-formed
+            Assert.Equal("svg", x.Root.Name.LocalName);
+            Assert.Contains(BendingGuide.Red, svg); Assert.Contains(BendingGuide.Blue, svg); Assert.Contains(BendingGuide.Green, svg);
+            // Bend starts 50 and 50+78.54+50 = 178.5 mm; ends 128.5 and 257.1 mm; cut length 307.1 mm.
+            foreach (var v in new[] { ">50<", ">128.5<", ">178.5<", ">257.1<", ">307.1<" }) Assert.Contains(v, svg);
+            Assert.Contains("turn tube 35° ACW", x.Root.Value); // the encoder writes ° as &#176; in the file
+        }
+
+        [Fact]
+        public void Instructions_TurnDirectionFollowsTheGeometry()
+        {
+            // The rotation in the bend table is right-hand about the direction from S to the far end.
+            // Seen from S looking along that direction, right-hand is clockwise; the tube is turned the other way.
+            var plus = BendingGuide.Instructions(ScreenshotTube(35), null);
+            Assert.Contains(plus, s => s.Contains("must point 35° clockwise from bend 1") && s.Contains("turn the tube 35° anticlockwise"));
+            var minus = BendingGuide.Instructions(ScreenshotTube(-35), null);
+            Assert.Contains(minus, s => s.Contains("must point 35° anticlockwise from bend 1") && s.Contains("turn the tube 35° clockwise"));
+            var same = BendingGuide.Instructions(ScreenshotTube(0), null);
+            Assert.Contains(same, s => s.Contains("Do not turn the tube"));
+            Assert.Contains(plus, s => s.StartsWith("Cut the tube to 307.1 mm"));
+            Assert.Contains(plus, s => s.Contains("B2 at 178.5 mm"));
+        }
+
+        [Fact]
+        public void RightHandRotation_LooksClockwiseFromS()
+        {
+            // Independent check of the wording: rotate +Y by +90° right-hand about +X (direction from S along the tube).
+            // An observer at S looks along +X; with "up" = +Y and their right = -Z (right-handed frame: right = forward × up... ),
+            // +Y rotated right-hand about +X goes to +Z, which is on the observer's LEFT... verify numerically below.
+            var up = Vec3.UnitY.RotateAbout(Vec3.UnitX, Math.PI / 2);
+            Assert.True(up.AlmostEquals(Vec3.UnitZ, 1e-12));
+            // Observer looking along +X with up = +Y: their right-hand side is forward × up = X × Y = +Z.
+            var right = Vec3.UnitX.Cross(Vec3.UnitY);
+            Assert.True(right.AlmostEquals(Vec3.UnitZ, 1e-12)); // top moved to the right = clockwise as seen by that observer
+        }
+    }
+}

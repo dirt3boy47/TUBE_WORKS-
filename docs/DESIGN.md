@@ -6,7 +6,7 @@ Release 0.4.0 (Phases 1, 2 and 3). This document contains the 8 deliverables tha
 
 | What | Status |
 |---|---|
-| Geometry engine (`TubeWorks.Geometry`) | 51 automated tests pass. Expected values come from closed-form hand calculations. The DXF output is also checked independently with ezdxf. |
+| Geometry engine (`TubeWorks.Geometry`) | 55 automated tests pass. Expected values come from closed-form hand calculations. The DXF output is also checked independently with ezdxf. |
 | Add-in compile against SOLIDWORKS 2026 interop (34.1.1.11) | Compiles: 0 errors, 0 warnings. So every API member that the add-in uses exists with the signature that it uses. |
 | Add-in compile against SOLIDWORKS 2016 interop (24.4) | Compiles: 0 errors, 0 warnings (since 0.2.0 the add-in uses `IBody2.Copy` and `SaveAs`). The setup program is built from this. |
 | Setup program (`TubeWorksSetup-0.2.0.exe`, NSIS) | Built; contents checked (42 files, no interop assemblies). Not run on Windows. |
@@ -253,3 +253,7 @@ closed, and WinForms/AppDomain exception handlers log errors instead of ending S
 SOLIDWORKS multiplies sheet-sketch coordinates by the sheet scale (now divided by the sheet scale; notes stay in paper coordinates);
 the active layer is restored after drawing (tables and notes were on the TEXT layer); the template's sheet format and size are kept
 (the sheet format was removed before). Added: template choice and the bending layout of the straight bar (`BendingLayout`).
+
+**Bending Guide (0.4.2).** `BendingGuide` draws the straightened tube as SVG (zones coloured, marks from S, ruler) and writes the manual
+steps. Turn directions are derived from the bend-table rotation (right-hand about the direction from S to the far end = clockwise seen from
+S); a test checks the words against the geometry for +35°, −35° and 0°.

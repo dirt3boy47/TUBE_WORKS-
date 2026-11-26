@@ -255,7 +255,20 @@ namespace TubeWorks.Geometry
             var list = (issues ?? Enumerable.Empty<ValidationIssue>()).ToList();
             if (list.Count == 0) Para("Manufacturing check: no errors, no warnings (limits not defined in the library are not checked).");
             foreach (var i in list) Para((i.Severity == IssueSeverity.Error ? "ERROR: " : "Warning: ") + i.Message, i.Severity == IssueSeverity.Error ? "err" : "warn");
+            Guide(t, c, p);
             if (cost != null) Cost(cost);
+            return this;
+        }
+
+        /// <summary>Rolled-out tube with bend marks (SVG) for manual bending.</summary>
+        public ManufacturingReport Guide(BendTable t, CompensatedData c, TubeProfile p)
+        {
+            if (t.Rows.Count == 0) return this;
+            _b.Append("<p><b>Bending guide</b> (straightened tube; green = first straight, blue = straight, red = bend; marks from the start end S):</p>");
+            _b.Append(BendingGuide.Svg(t, c, p));
+            _b.Append("<ol>");
+            foreach (var i in BendingGuide.Instructions(t, c)) _b.Append("<li>").Append(H(i)).Append("</li>");
+            _b.Append("</ol>");
             return this;
         }
 

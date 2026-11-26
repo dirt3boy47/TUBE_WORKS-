@@ -62,6 +62,7 @@ namespace TubeWorks.AddIn
             new Cmd { Name = "CNC Output", Tip = "Compensated bend data (springback, stretch, trims from the library) through a postprocessor template", Callback = nameof(OnCnc), Implemented = true },
             new Cmd { Name = "Manufacturing Report", Tip = "HTML report: data, checks, cost and stock for a quantity", Callback = nameof(OnReport), Implemented = true },
             new Cmd { Name = "Batch & Nesting", Tip = "Process a folder of parts: CNC files, DXF, STEP, nesting into stock bars, cost, one report", Callback = nameof(OnBatch), Implemented = true, AnyDocument = true },
+            new Cmd { Name = "Bending Guide", Tip = "Rolled-out tube with bend marks, turn and angle per bend, and manual bending steps (printable)", Callback = nameof(OnGuide), Implemented = true },
             new Cmd { Name = "Tube Drawing", Tip = "Manufacturing drawing: views, centreline, straightened tube, developed surface, bend table (A4–A1)", Callback = nameof(OnDrawing), Implemented = true },
         };
 
@@ -231,6 +232,17 @@ namespace TubeWorks.AddIn
             if (TubeFeatureStore.Insert(m, data, body, TubeFeatureStore.NextName(m, TubeFeatureKind.Rebend)) == null)
                 SwUtil.Message(App, "SOLIDWORKS could not create the Tube Rebend feature.", swMessageBoxIcon_e.swMbStop);
             else UnbendPage.ShowReport(App, m, data.Id, "Rebend");
+        });
+
+        public void OnGuide() => Run("Bending Guide", m =>
+        {
+            var part = PartAnalysis.Run(App, m, LibraryStore.Load(), false);
+            if (part.Error != null) { SwUtil.Message(App, "Bending Guide: " + part.Error, swMessageBoxIcon_e.swMbWarning); return; }
+            if (part.Table.Rows.Count == 0) { SwUtil.Message(App, "Bending Guide: the tube has no bends."); return; }
+            string dir = string.IsNullOrEmpty(part.PathName) ? System.IO.Path.GetTempPath() : System.IO.Path.GetDirectoryName(part.PathName);
+            string file = System.IO.Path.Combine(dir, part.Name + " bending guide.html");
+            System.IO.File.WriteAllText(file, BendingGuide.Html(part.Name, part.Path.Profile, part.Material, part.Table, part.Comp), new System.Text.UTF8Encoding(false));
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file) { UseShellExecute = true }); } catch (Exception ex) { Log.Error("Open guide", ex); }
         });
 
         public void OnCnc() => Run("CNC Output", m => CncForm.ShowFor(App, m));
