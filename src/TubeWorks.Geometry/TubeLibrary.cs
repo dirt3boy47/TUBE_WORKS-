@@ -26,6 +26,8 @@ namespace TubeWorks.Geometry
         /// <summary>Calibration data, stored for Phase 3 compensation. TubeWorks does not apply these values yet.</summary>
         public double? SpringbackDeg { get; set; }
         public double? StretchPerBend { get; set; }
+        /// <summary>Optional: smallest distance between a cut and a bend tangent point.</summary>
+        public double? MinCutDistanceFromBend { get; set; }
         public string Machine { get; set; } = "";
         public string Tooling { get; set; } = "";
     }
@@ -46,6 +48,9 @@ namespace TubeWorks.Geometry
             {
                 r.MinBendRadius = m.MinBendRadius; r.MinStraightBetweenBends = m.MinStraightBetweenBends; r.MinClampLength = m.MinClampLength;
                 if (m.MaxBendAngleDeg.HasValue) r.MaxBendAngle = Angles.ToRad(m.MaxBendAngleDeg.Value);
+                r.ToolingRadii = new List<double>(m.BendRadii);
+                r.StockLengths = new List<double>(m.StockLengths);
+                r.MinCutDistanceFromBend = m.MinCutDistanceFromBend;
             }
             return r;
         }
@@ -78,6 +83,7 @@ namespace TubeWorks.Geometry
         {
             "Name", "Material", "OD (mm)", "Wall (mm)", "Stock lengths (mm)", "Bend radii (mm)", "Min CLR (mm)",
             "Min straight between bends (mm)", "Min clamp length (mm)", "Max bend angle (deg)", "Springback (deg)", "Stretch per bend (mm)", "Machine", "Tooling",
+            "Min cut distance from bend (mm)",
         };
 
         public string ToCsv()
@@ -89,7 +95,7 @@ namespace TubeWorks.Geometry
                 {
                     Q(p.Name), Q(p.Material), Mm(p.OuterDiameter), Mm(p.WallThickness), Q(string.Join(";", p.StockLengths.Select(Mm))),
                     Q(string.Join(";", p.BendRadii.Select(Mm))), Mm(p.MinBendRadius), Mm(p.MinStraightBetweenBends), Mm(p.MinClampLength),
-                    D(p.MaxBendAngleDeg), D(p.SpringbackDeg), Mm(p.StretchPerBend), Q(p.Machine), Q(p.Tooling),
+                    D(p.MaxBendAngleDeg), D(p.SpringbackDeg), Mm(p.StretchPerBend), Q(p.Machine), Q(p.Tooling), Mm(p.MinCutDistanceFromBend),
                 }));
             return sb.ToString();
         }
@@ -115,7 +121,7 @@ namespace TubeWorks.Geometry
                     Name = Get(0), Material = Get(1), OuterDiameter = Parse(Get(2), r) / 1000, WallThickness = Parse(Get(3), r) / 1000,
                     StockLengths = List(4), BendRadii = List(5), MinBendRadius = Opt(6, 0.001), MinStraightBetweenBends = Opt(7, 0.001),
                     MinClampLength = Opt(8, 0.001), MaxBendAngleDeg = Opt(9, 1), SpringbackDeg = Opt(10, 1), StretchPerBend = Opt(11, 0.001),
-                    Machine = Get(12), Tooling = Get(13),
+                    Machine = Get(12), Tooling = Get(13), MinCutDistanceFromBend = Opt(14, 0.001),
                 });
             }
             return lib;

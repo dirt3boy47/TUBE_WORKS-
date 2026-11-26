@@ -26,6 +26,20 @@ namespace TubeWorks.Geometry
         public double? MinClampLength { get; set; }
         /// <summary>Largest bend angle the machine can make. Default 180°, the usual limit of rotary-draw benders; set null to disable.</summary>
         public double? MaxBendAngle { get; set; } = Math.PI;
+        /// <summary>Centreline radii available on the tooling. Empty = not defined (not checked).</summary>
+        public List<double> ToolingRadii { get; set; } = new List<double>();
+        /// <summary>Available stock lengths. Empty = not defined (not checked).</summary>
+        public List<double> StockLengths { get; set; } = new List<double>();
+        /// <summary>Smallest distance between a cut and a bend tangent point. Null = not checked.</summary>
+        public double? MinCutDistanceFromBend { get; set; }
+    }
+
+    /// <summary>A cut (hole, slot, notch) as an interval of developed length along the tube.</summary>
+    public struct CutRange
+    {
+        public double Start, End;
+        public string Description;
+        public CutRange(double start, double end, string description) { Start = Math.Min(start, end); End = Math.Max(start, end); Description = description; }
     }
 
     public static class TubeValidator
@@ -71,6 +85,16 @@ namespace TubeWorks.Geometry
                         issues.Add(W(path.RootId, "CLAMP", $"Neither end straight ({table.Rows[0].Feed * 1000:0.###} mm, {table.FinalStraight * 1000:0.###} mm) is as long as the clamping length {rules.MinClampLength.Value * 1000:0.###} mm."));
                 }
 
+                if (rules.ToolingRadii.Count > 0)
+                    foreach (var a in arcs.Where(a => !rules.ToolingRadii.Any(r => Math.Abs(r - a.Radius) <= 1e-6)))
+                        issues.Add(W(a.FeatureId, "NO_TOOLING", $"{name(a.FeatureId)}: no tooling for centreline radius {a.Radius * 1000:0.###} mm (available: {string.Join(", ", rules.ToolingRadii.Select(r => (r * 1000).ToString("0.###")))} mm)."));
+                if (rules.StockLengths.Count > 0)
+                {
+                    double need = path.DevelopedLength, max = rules.StockLengths.Max();
+                    if (need > max + 1e-9)
+                        issues.Add(new ValidationIssue { Severity = IssueSeverity.Error, FeatureId = path.RootId, Code = "STOCK", Message = $"Developed length {need * 1000:0.###} mm is longer than the longest stock length {max * 1000:0.###} mm." });
+                }
+
                 var si = FindSelfIntersection(prims, path.Profile.OuterDiameter);
                 if (si != null)
                     issues.Add(new ValidationIssue
@@ -79,6 +103,37 @@ namespace TubeWorks.Geometry
                         Message = $"The tube intersects itself near {name(si.Value.featureId)}: centreline points are {si.Value.distance * 1000:0.###} mm apart, less than the outside diameter. (Sampled check.)",
                     });
             }
+            return issues;
+        }
+
+        /// <summary>
+        /// Cuts that lie inside a bend or closer to a bend tangent point than the limit. Positions are developed lengths
+        /// measured from the start of the path. A cut inside a bend is always reported (it distorts in bending).
+        /// </summary>
+        public static List<ValidationIssue> ValidateCuts(TubePath path, IEnumerable<CutRange> cuts, ManufacturingRules rules)
+        {
+            rules = rules ?? new ManufacturingRules();
+            var issues = new List<ValidationIssue>();
+            var bends = new List<(double s0, double s1, int n)>();
+            double s = 0; int k = 0;
+            foreach (var p in path.Primitives)
+            {
+                if (p is ArcPrimitive) bends.Add((s, s + p.Length, ++k));
+                s += p.Length;
+            }
+            double gap = rules.MinCutDistanceFromBend ?? 0;
+            foreach (var c in cuts)
+                foreach (var b in bends)
+                {
+                    if (c.End > b.s0 + 1e-9 && c.Start < b.s1 - 1e-9)
+                        issues.Add(W(path.RootId, "CUT_IN_BEND", $"{c.Description} lies in bend {b.n} ({b.s0 * 1000:0.#}–{b.s1 * 1000:0.#} mm developed). It distorts in bending; its development is approximate."));
+                    else if (gap > 0)
+                    {
+                        double d = c.End <= b.s0 ? b.s0 - c.End : c.Start - b.s1;
+                        if (d >= 0 && d < gap - 1e-9)
+                            issues.Add(W(path.RootId, "CUT_NEAR_BEND", $"{c.Description} is {d * 1000:0.###} mm from bend {b.n}; the minimum is {gap * 1000:0.###} mm."));
+                    }
+                }
             return issues;
         }
 

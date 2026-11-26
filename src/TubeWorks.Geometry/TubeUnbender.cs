@@ -18,6 +18,8 @@ namespace TubeWorks.Geometry
         /// start cross-section only; material inside a straightened bend does not move rigidly.
         /// </summary>
         public RigidTransform BentToUnbent { get; set; }
+        /// <summary>True when this primitive lies after the fixed primitive (walking forward), false when before it.</summary>
+        public bool AfterFixed { get; set; } = true;
     }
 
     public sealed class UnbendResult
@@ -52,7 +54,7 @@ namespace TubeWorks.Geometry
             {
                 var prev = path[i - 1];
                 if (prev is ArcPrimitive pa && straighten(pa)) m = m.Compose(StraightenMotion(pa, forward: true));
-                items[i] = Make(i, path[i], m, straighten);
+                items[i] = Make(i, path[i], m, straighten, true);
             }
             // Backward from the fixed primitive.
             m = RigidTransform.Identity;
@@ -60,19 +62,26 @@ namespace TubeWorks.Geometry
             {
                 var next = path[i + 1];
                 if (next is ArcPrimitive na && straighten(na)) m = m.Compose(StraightenMotion(na, forward: false));
-                items[i] = Make(i, path[i], m, straighten);
+                items[i] = Make(i, path[i], m, straighten, false);
             }
             res.Items.AddRange(items);
             return res;
         }
 
-        private static UnbentPrimitive Make(int i, PathPrimitive p, RigidTransform m, Func<ArcPrimitive, bool> straighten)
+        private static UnbentPrimitive Make(int i, PathPrimitive p, RigidTransform m, Func<ArcPrimitive, bool> straighten, bool afterFixed)
         {
-            var it = new UnbentPrimitive { Index = i, Bent = p, BentToUnbent = m };
+            // m is the motion of the cross-section on the side of the fixed primitive.
+            var it = new UnbentPrimitive { Index = i, Bent = p, BentToUnbent = m, AfterFixed = afterFixed };
             if (p is ArcPrimitive a && straighten(a))
             {
                 it.Straightened = true;
-                it.Unbent = new StraightPrimitive(m.Apply(a.StartPoint), m.ApplyDir(a.StartTangent), a.Length) { FeatureId = a.FeatureId };
+                if (afterFixed)
+                    it.Unbent = new StraightPrimitive(m.Apply(a.StartPoint), m.ApplyDir(a.StartTangent), a.Length) { FeatureId = a.FeatureId };
+                else
+                {
+                    Vec3 t = m.ApplyDir(a.EndTangent);
+                    it.Unbent = new StraightPrimitive(m.Apply(a.EndPoint) - t * a.Length, t, a.Length) { FeatureId = a.FeatureId };
+                }
             }
             else it.Unbent = Transform(p, m);
             return it;
@@ -163,6 +172,32 @@ namespace TubeWorks.Geometry
                 else r.Add(p);
             }
             return r;
+        }
+
+        /// <summary>
+        /// Map a point of the bent tube to the unbent state. Points in parts that move rigidly are mapped exactly.
+        /// A point inside a straightened bend keeps its position in the cross-section and its centreline arc length
+        /// (centreline = neutral axis): this is the usual bending model, but the outside and inside of the bend
+        /// stretch and compress in reality, so the result is approximate (<c>exact</c> = false).
+        /// </summary>
+        public static (Vec3 point, bool exact) MapPoint(UnbendResult u, Vec3 bentPoint)
+        {
+            var path = u.Items.Select(i => i.Bent).ToList();
+            var (idx, s, _) = Locate(path, bentPoint);
+            if (idx < 0) return (bentPoint, false);
+            var it = u.Items[idx];
+            if (!it.Straightened) return (it.BentToUnbent.Apply(bentPoint), true);
+            var a = (ArcPrimitive)it.Bent;
+            double ap = Math.Max(0, Math.Min(a.Angle, s / a.Radius));
+            Vec3 v = bentPoint - a.PointAtAngle(ap);
+            var st = (StraightPrimitive)it.Unbent;
+            if (it.AfterFixed)
+            {
+                Vec3 v0 = v.RotateAbout(a.PlaneNormal, -ap);
+                return (st.StartPoint + st.Direction * (ap * a.Radius) + it.BentToUnbent.ApplyDir(v0), false);
+            }
+            Vec3 v1 = v.RotateAbout(a.PlaneNormal, a.Angle - ap);
+            return (st.EndPoint - st.Direction * ((a.Angle - ap) * a.Radius) + it.BentToUnbent.ApplyDir(v1), false);
         }
 
         // ------------------------------------------------------------------ region classification

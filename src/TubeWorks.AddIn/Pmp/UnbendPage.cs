@@ -26,6 +26,7 @@ namespace TubeWorks.AddIn.Pmp
         private IPropertyManagerPageListbox _list;
         private IPropertyManagerPageCombobox _fixed;
         private IPropertyManagerPageLabel _info;
+        private List<CutInfo> _cuts = new List<CutInfo>();
 
         private UnbendPage(ISldWorks app, IModelDoc2 model, TubeFeatureData data, TubePath path, ChainResult chain, IBody2 body, IFeature f, IMacroFeatureData md) : base(app, model)
         {
@@ -39,6 +40,11 @@ namespace TubeWorks.AddIn.Pmp
                 for (int i = 0; i < fs.Primitives.Count; i++)
                     if (fs.Primitives[i] is StraightPrimitive sp)
                         _segments.Add((fs.Data.Id, i, $"{fs.FeatureName}{(fs.Primitives.Count > 1 ? $" (straight {i + 1})" : "")}  {SwUtil.FormatLength(model, sp.Length)}"));
+            if (body != null)
+            {
+                try { _cuts = CutAnalysis.Analyze(_builder, path, TubeUnbender.ForFeature(path, null), body, id => id, out bool _, out string _) ?? new List<CutInfo>(); }
+                catch (Exception ex) { Log.Error("Unbend cut preview", ex); }
+            }
         }
 
         public static void Create(ISldWorks app, IModelDoc2 model)
@@ -107,8 +113,14 @@ namespace TubeWorks.AddIn.Pmp
             if (!CanAccept(out string why)) { Message(why, true); return; }
             Message(null);
             var u = TubeUnbender.ForFeature(_path, _data);
-            var body = _builder.Build(u.UnbentPath, _path.Profile, out string err);
+            var body = _builder.Build(TubeUnbender.MergeCollinear(u.UnbentPath), _path.Profile, out string err);
             if (body == null) Message(err, true); else _preview.Show(body);
+            if (_cuts.Count > 0)
+            {
+                var stay = _cuts.Where(c => TubeUnbender.ClassifyRigid(u, c.Piece.Samples) < 0).ToList();
+                _info.Caption = $"Cuts: {_cuts.Count - stay.Count} move exactly with their segment; {stay.Count} lie in a straightened bend and are not moved.";
+                if (stay.Count > 0) Message("Not moved by this Unbend (they come back unchanged with Rebend):\n" + string.Join("\n", stay.Select(c => "• " + c.Description)));
+            }
         }
 
         protected override bool CanAccept(out string reason)

@@ -16,14 +16,16 @@ namespace TubeWorks.AddIn.Pmp
 
         private const int RefMark = 2;
         private const int IdFace = 10, IdOd = 11, IdWall = 12, IdAxis = 13, IdAttach = 14;
-        private const int IdMode = 20, IdRadius = 21, IdAngle = 22, IdRot = 23, IdReverse = 24, IdAfter = 25, IdRef = 26, IdRefLabel = 27;
+        private const int IdTooling = 29, IdMode = 20, IdRadius = 21, IdAngle = 22, IdRot = 23, IdReverse = 24, IdAfter = 25, IdRef = 26, IdRefLabel = 27;
         private const int IdCoord = 30, IdX = 31, IdY = 32, IdZ = 33, IdApply = 34, IdStatus = 35;
         private const int IdMerge = 40, IdTangent = 41, IdCentre = 42, IdLive = 43;
         private const int IdBendLen = 50, IdTotal = 51, IdMinR = 52, IdWarn = 53;
 
         private IPropertyManagerPageSelectionbox _face, _ref;
         private IPropertyManagerPageLabel _od, _wall, _axis, _attach, _status, _bendLen, _total, _minR, _warn, _refLabel;
-        private IPropertyManagerPageCombobox _mode, _coord;
+        private IPropertyManagerPageCombobox _mode, _coord, _tooling;
+        private List<double> _toolRadii = new List<double>();
+        private TubeProfile _toolingFor;
         private IPropertyManagerPageNumberbox _radius, _angle, _rot, _after, _x, _y, _z;
         private IPropertyManagerPageCheckbox _reverse, _merge, _tangent, _centre, _live;
         private IPropertyManagerPageButton _apply;
@@ -88,6 +90,7 @@ namespace TubeWorks.AddIn.Pmp
             _mode = Combo(g2, IdMode, "How to define the bend",
                 new[] { "Bend radius and angle", "XYZ end point", "End direction vector", "Bend plane from reference" }, 0);
             _radius = Number(g2, IdRadius, "Centreline bend radius", "Centreline bend radius (CLR)", swNumberboxUnitType_e.swNumberBox_Length, 1e-5, 100, Data.BendRadius, 0.001);
+            _tooling = Combo(g2, IdTooling, "Tooling radius from the tube library (select to use it)", new[] { "(no tooling radii in the library)" }, 0);
             _angle = Number(g2, IdAngle, "Bend angle", "Bend angle", swNumberboxUnitType_e.swNumberBox_Angle, Angles.ToRad(0.01), Angles.ToRad(359.99), Data.BendAngle, Angles.ToRad(1));
             _rot = Number(g2, IdRot, "Bend plane rotation", "Rotation of the bend plane about the tube axis, from the reference direction", swNumberboxUnitType_e.swNumberBox_Angle, -2 * Math.PI, 2 * Math.PI, Data.PlaneRotation, Angles.ToRad(5));
             _reverse = Check(g2, IdReverse, "Reverse bend direction", "Bend to the opposite side", Data.ReverseDirection);
@@ -137,6 +140,10 @@ namespace TubeWorks.AddIn.Pmp
                     if (err != null) { Message(err, true); Start = null; }
                     break;
                 case IdRadius: Data.BendRadius = _radius.Value; break;
+                case IdTooling:
+                    int t = _tooling.CurrentSelection - 1;
+                    if (t >= 0 && t < _toolRadii.Count) { Data.BendRadius = _toolRadii[t]; Building = true; _radius.Value = Data.BendRadius; Building = false; }
+                    break;
                 case IdAngle: Data.BendAngle = _angle.Value; break;
                 case IdRot: Data.PlaneRotation = _rot.Value; break;
                 case IdReverse: Data.ReverseDirection = _reverse.Checked; break;
@@ -278,6 +285,17 @@ namespace TubeWorks.AddIn.Pmp
                 _axis.Caption = $"Tube axis: ({t.X:0.###}, {t.Y:0.###}, {t.Z:0.###})";
                 _attach.Caption = AttachText;
                 var preset = LibraryStore.Load().Match(Profile);
+                if (!ReferenceEquals(_toolingFor, Profile))
+                {
+                    _toolingFor = Profile;
+                    _toolRadii = preset?.BendRadii?.OrderBy(r => r).ToList() ?? new List<double>();
+                    Building = true;
+                    _tooling.Clear();
+                    _tooling.AddItems(_toolRadii.Count == 0 ? new[] { "(no tooling radii in the library for this tube)" }
+                        : new[] { "Tooling radius…" }.Concat(_toolRadii.Select(r => "CLR " + SwUtil.FormatLength(Model, r))).ToArray());
+                    _tooling.CurrentSelection = 0;
+                    Building = false;
+                }
                 _minR.Caption = "Minimum recommended radius: " + (preset?.MinBendRadius != null ? SwUtil.FormatLength(Model, preset.MinBendRadius.Value) : "not defined in the tube library");
             }
             UpdatePreview(UserSettings.Current.LivePreview, UserSettings.Current.ShowCentreline);

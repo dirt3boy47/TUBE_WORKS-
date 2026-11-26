@@ -136,6 +136,8 @@ namespace TubeWorks.AddIn.Features
             if (unbend == null) return "TubeWorks Rebend: its Unbend feature is missing.";
             if (unbend.Suppressed) return "TubeWorks Rebend: its Unbend feature is suppressed.";
             if (!MaterialTransfer.HeldBack.TryGetValue(unbend.Data.Id, out var held))
+                held = HeldBackFromUnbendInput(sw, model, feat, unbend, out held);
+            if (held == null)
                 return "TubeWorks Rebend: rebuild the whole part (Ctrl+Q) so that the Unbend data is available.";
 
             var c = Prepare(sw, model, feat, unbend.Data.ParentId, out string err);
@@ -172,6 +174,30 @@ namespace TubeWorks.AddIn.Features
             MaterialTransfer.Reports[me.Id] = rep;
             UserIds.Assign(md, result, Solution(me, c.Path.Primitives));
             return result;
+        }
+
+        /// <summary>
+        /// After reopening a file the in-memory list is empty. Recompute it from the body that the Unbend feature
+        /// received (its edit body), when SOLIDWORKS still provides that body. Returns null when it does not.
+        /// </summary>
+        private static List<IBody2> HeldBackFromUnbendInput(ISldWorks sw, IModelDoc2 model, IFeature feat, StoredFeature unbend, out List<IBody2> held)
+        {
+            held = null;
+            try
+            {
+                var bentInput = SwUtil.Arr<IBody2>((object)unbend.Definition.EditBodies).FirstOrDefault();
+                if (bentInput == null) return null;
+                var c = Prepare(sw, model, feat, unbend.Data.ParentId, out string _);
+                if (c == null) return null;
+                var u = TubeUnbender.ForFeature(c.Path, unbend.Data);
+                var nominalBent = c.Builder.Build(c.Path.Primitives, c.Path.Profile, out string _);
+                if (nominalBent == null) return null;
+                held = MaterialTransfer.Removed(nominalBent, bentInput, out bool _)
+                    .Where(p => TubeUnbender.ClassifyRigid(u, p.Samples) < 0).Select(p => p.Body).ToList();
+                MaterialTransfer.HeldBack[unbend.Data.Id] = held;
+                return held;
+            }
+            catch (Exception ex) { Log.Error("Rebend held-back recovery", ex); return null; }
         }
     }
 

@@ -74,6 +74,10 @@ namespace TubeWorks.Geometry
                 foreach (var p in pl.Points) { G(0, "VERTEX"); G(8, L(pl.Layer)); N(10, p.X * k); N(20, p.Y * k); N(30, 0); }
                 G(0, "SEQEND"); G(8, L(pl.Layer));
             }
+            foreach (var c in pattern.Circles)
+            {
+                G(0, "CIRCLE"); G(8, L(c.Layer)); N(10, c.Centre.X * k); N(20, c.Centre.Y * k); N(30, 0); N(40, c.Radius * k);
+            }
             foreach (var t in pattern.Texts)
             {
                 G(0, "TEXT"); G(8, L(t.Layer)); N(10, t.At.X * k); N(20, t.At.Y * k); N(30, 0); N(40, t.Height * k);

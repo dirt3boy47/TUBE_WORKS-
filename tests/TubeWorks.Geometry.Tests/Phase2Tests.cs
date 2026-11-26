@@ -84,6 +84,84 @@ namespace TubeWorks.Geometry.Tests
             Assert.Throws<InvalidOperationException>(() => TubeUnbender.ForFeature(path, new TubeFeatureData { Kind = TubeFeatureKind.Unbend, FixedFeatureId = b2.Id, FixedPrimitive = 0 }));
         }
 
+        [Theory]
+        [InlineData(0)]
+        [InlineData(2)]
+        [InlineData(4)]
+        public void Unbend_AnyFixedSegment_IsContinuousAndKeepsLength(int fixedStraight)
+        {
+            var (path, _, _, _) = TwoBendTube();
+            // Straights are primitives 0, 2, 4; fix one of them by its feature and index.
+            var fixedPrim = path.Primitives[fixedStraight];
+            var owner = path.Primitives.Select((p, i) => (p, i)).Where(x => x.p.FeatureId == fixedPrim.FeatureId).ToList();
+            var u = TubeUnbender.ForFeature(path, new TubeFeatureData { Kind = TubeFeatureKind.Unbend, FixedFeatureId = fixedPrim.FeatureId, FixedPrimitive = owner.FindIndex(x => x.i == fixedStraight) });
+            var up = u.UnbentPath;
+            for (int i = 1; i < up.Count; i++) { Near(up[i - 1].EndPoint, up[i].StartPoint, 1e-12); Near(up[i - 1].EndTangent, up[i].StartTangent, 1e-12); }
+            Near(fixedPrim.StartPoint, up[fixedStraight].StartPoint, 1e-12);
+            Near(fixedPrim.EndPoint, up[fixedStraight].EndPoint, 1e-12);
+            Assert.Equal(path.DevelopedLength, up.Sum(p => p.Length), 12);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(4)]
+        public void MapPoint_ExactInStraights_ContinuousAcrossBends_AndArcLengthInBends(int fixedStraight)
+        {
+            var (path, _, b1, _) = TwoBendTube();
+            var fixedPrim = path.Primitives[fixedStraight];
+            var owner = path.Primitives.Select((p, i) => (p, i)).Where(x => x.p.FeatureId == fixedPrim.FeatureId).ToList();
+            var u = TubeUnbender.ForFeature(path, new TubeFeatureData { Kind = TubeFeatureKind.Unbend, FixedFeatureId = fixedPrim.FeatureId, FixedPrimitive = owner.FindIndex(x => x.i == fixedStraight) });
+            var arc = (ArcPrimitive)path.Primitives[1];
+            var up = u.UnbentPath;
+            // On the centreline in the middle of bend 1: maps to the straight centreline at the same arc length.
+            var (q, exact) = TubeUnbender.MapPoint(u, arc.PointAtAngle(arc.Angle / 2));
+            Assert.False(exact);
+            Near(up[1].PointAt(arc.Length / 2), q, 1e-12);
+            // A point on the outer wall: keeps its distance from the centreline.
+            var wall = arc.PointAtAngle(arc.Angle / 3) + arc.PlaneNormal * 0.0125;
+            var (qw, _) = TubeUnbender.MapPoint(u, wall);
+            Near(up[1].PointAt(arc.Length / 3), qw - (qw - up[1].PointAt(arc.Length / 3)), 1e-12);
+            Assert.Equal(0.0125, (qw - up[1].PointAt(arc.Length / 3)).Length, 12);
+            // Continuity at both ends of the bend with the rigid motion of the neighbouring straights.
+            foreach (var (ang, nb) in new[] { (1e-9, 0), (arc.Angle - 1e-9, 2) })
+            {
+                var p = arc.PointAtAngle(ang) + arc.PlaneNormal * 0.01;
+                var (qa, _) = TubeUnbender.MapPoint(u, p);
+                Near(u.Items[nb].BentToUnbent.Apply(p), qa, 1e-8);
+            }
+            // Straight segment points are exact.
+            var (qs, ex2) = TubeUnbender.MapPoint(u, path.Primitives[2].PointAt(0.03) + arc.PlaneNormal * 0.01);
+            Assert.True(ex2);
+        }
+
+        [Fact]
+        public void Validator_ToolingStockAndCutDistance()
+        {
+            var (path, _, _, _) = TwoBendTube();
+            var rules = new ManufacturingRules { ToolingRadii = { 0.05 }, StockLengths = { 0.3 }, MinCutDistanceFromBend = 0.01 };
+            // Developed length 0.41 m > stock 0.3 m: error. Both radii (0.05) exist: no tooling warning.
+            var full = TubeChainSolver.Solve(TwoBendInputs());
+            var issues = TubeValidator.Validate(full, rules);
+            Assert.Contains(issues, i => i.Code == "STOCK" && i.Severity == IssueSeverity.Error);
+            Assert.DoesNotContain(issues, i => i.Code == "NO_TOOLING");
+            rules.ToolingRadii = new List<double> { 0.04 };
+            Assert.Equal(2, TubeValidator.Validate(full, rules).Count(i => i.Code == "NO_TOOLING"));
+            // Bend 1 spans 0.1 .. 0.1785 m developed.
+            var cuts = new[] { new CutRange(0.05, 0.06, "hole A"), new CutRange(0.095, 0.098, "hole B"), new CutRange(0.12, 0.13, "hole C") };
+            var ci = TubeValidator.ValidateCuts(full.Paths[0], cuts, rules);
+            Assert.DoesNotContain(ci, i => i.Message.StartsWith("hole A"));
+            Assert.Contains(ci, i => i.Code == "CUT_NEAR_BEND" && i.Message.StartsWith("hole B"));
+            Assert.Contains(ci, i => i.Code == "CUT_IN_BEND" && i.Message.StartsWith("hole C"));
+        }
+
+        static List<ChainInput> TwoBendInputs()
+        {
+            var b = new TubeFeatureData { Kind = TubeFeatureKind.BaseTube, OuterDiameter = 0.025, WallThickness = 0.002, Axis = Vec3.UnitX, Length = 0.1 };
+            var b1 = new TubeFeatureData { Kind = TubeFeatureKind.Bend, ParentId = b.Id, BendRadius = 0.05, BendAngle = Rad(90), StraightAfter = 0.1 };
+            var b2 = new TubeFeatureData { Kind = TubeFeatureKind.Bend, ParentId = b1.Id, BendRadius = 0.05, BendAngle = Rad(60), PlaneRotation = Rad(40), StraightAfter = 0.08 };
+            return new[] { b, b1, b2 }.Select(d => new ChainInput { Data = d, FeatureName = d.Kind.ToString() }).ToList();
+        }
+
         [Fact]
         public void HoleTransfer_RoundTripIsExact_ForStraightRegions_AndRefusedInBends()
         {
@@ -181,6 +259,27 @@ namespace TubeWorks.Geometry.Tests
             var merged = TubeUnbender.MergeCollinear(TubeUnbender.ForFeature(path, null).UnbentPath);
             Assert.Single(merged);
             Assert.Equal(path.DevelopedLength, merged[0].Length, 12);
+        }
+
+        [Fact]
+        public void Pattern_Simplify_RemovesCollinearPoints_AndFindsTrueCircles_Only()
+        {
+            var pat = new Pattern2D { Length = 1, Width = 1 };
+            var line = new PatternPolyline { Layer = PatternLayer.OuterProfile };
+            for (int i = 0; i <= 10; i++) line.Points.Add(new Point2(i * 0.1, 0.2));
+            pat.Polylines.Add(line);
+            var circle = new PatternPolyline { Layer = PatternLayer.InternalCutouts, Closed = true };
+            for (int i = 0; i < 40; i++) circle.Points.Add(new Point2(0.5 + 0.004 * Math.Cos(i * Math.PI / 20), 0.3 + 0.004 * Math.Sin(i * Math.PI / 20)));
+            pat.Polylines.Add(circle);
+            var ellipse = new PatternPolyline { Layer = PatternLayer.InternalCutouts, Closed = true };
+            for (int i = 0; i < 40; i++) ellipse.Points.Add(new Point2(0.2 + 0.004 * Math.Cos(i * Math.PI / 20), 0.3 + 0.0045 * Math.Sin(i * Math.PI / 20)));
+            pat.Polylines.Add(ellipse);
+            pat.Simplify(1e-6);
+            Assert.Equal(2, pat.Polylines[0].Points.Count);
+            Assert.Single(pat.Circles);
+            Assert.Equal(0.004, pat.Circles[0].Radius, 9);
+            Assert.Equal(2, pat.Polylines.Count); // the ellipse stays a polyline
+            Assert.Contains("\r\nCIRCLE\r\n", DxfWriter.Write(pat));
         }
 
         [Fact]

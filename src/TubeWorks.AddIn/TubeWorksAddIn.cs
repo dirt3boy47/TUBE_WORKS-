@@ -334,20 +334,14 @@ namespace TubeWorks.AddIn
                 var all = TubeFeatureStore.Scan(m);
                 if (Features.StateFeatureBase.ActiveUnbends(all).Any() || all.Any(x => x.Data.Kind == TubeFeatureKind.FlatPattern && !x.Suppressed)) return list;
                 var builder = new BodyBuilder(App) { VerifyGeometry = false };
+                var lib = LibraryStore.Load();
                 foreach (var path in chain.Paths.Where(p => p.RootIsBaseTube))
                 {
                     var actual = TubeFeatureStore.TubeBody(all, path);
-                    var nominal = builder.Build(path.Primitives, path.Profile, out string _);
-                    if (actual == null || nominal == null) continue;
                     var u = TubeUnbender.ForFeature(path, null);
-                    foreach (var p in MaterialTransfer.Removed(nominal, actual, out bool _))
-                        if (TubeUnbender.ClassifyRigid(u, p.Samples) < 0)
-                            list.Add(new ValidationIssue
-                            {
-                                Severity = IssueSeverity.Warning, Code = "CUT_IN_BEND", FeatureId = path.RootId,
-                                Message = "Feature in a bend region, distorts in bending and is not unbent exactly: " +
-                                          MaterialTransfer.Describe(path.Primitives, p, id => all.FirstOrDefault(x => x.Data.Id == id)?.Feature.Name ?? id),
-                            });
+                    var cuts = CutAnalysis.Analyze(builder, path, u, actual, id => all.FirstOrDefault(x => x.Data.Id == id)?.Feature.Name ?? id, out bool _, out string _);
+                    if (cuts == null) continue;
+                    list.AddRange(TubeValidator.ValidateCuts(path, cuts.Select(c => new CutRange(c.S0, c.S1, c.Description)), lib.RulesFor(path.Profile)));
                 }
             }
             catch (Exception ex) { Log.Error("CutsInBends", ex); }

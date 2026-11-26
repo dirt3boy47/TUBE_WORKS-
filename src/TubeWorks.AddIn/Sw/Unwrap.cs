@@ -55,7 +55,7 @@ namespace TubeWorks.AddIn.Sw
                 var cp = SwUtil.D((object)surf.CylinderParams); // origin (3), axis (3), radius
                 if (cp == null || cp.Length < 7 || Math.Abs(cp[6] - faceR) > Math.Max(1e-7, faceR * 1e-6)) continue;
                 faces++;
-                foreach (var loop in SwUtil.Arr<ILoop2>((object)face.GetLoops())) loops.Add(LoopPoints(loop, chord));
+                foreach (var loop in SwUtil.Arr<ILoop2>((object)face.GetLoops())) loops.Add(CutAnalysis.LoopPoints(loop, chord));
             }
             if (faces == 0) { error = "The " + (surface == UnwrapSurface.Inside ? "inside" : "outside") + " cylindrical face was not found."; return null; }
 
@@ -65,68 +65,45 @@ namespace TubeWorks.AddIn.Sw
                            $"{surface.ToString().ToUpperInvariant()} SURFACE  W {uw.Width * 1000:0.###}  SEAM {Angles.ToDeg(seamAngle):0.#}deg  {model.GetTitle()}";
             var pat = uw.Build(loops, marks, title);
 
+            // Cuts: engraving (does not reach the bore) and cuts in bends (no exact transfer).
+            var cuts = CutAnalysis.Analyze(c.Builder, path, u, actual, c.Name, out bool _, out error) ?? new List<CutInfo>();
+            error = null;
+            int approx = 0;
+            foreach (var cut in cuts)
+            {
+                var layer = cut.Through ? PatternLayer.InternalCutouts : PatternLayer.Engraving;
+                if (cut.RigidIndex < 0)
+                {
+                    // Not in the straightened body: develop its outline from the bent tube with the bending model (approximate).
+                    foreach (var outline in CutAnalysis.OutlinesAtRadius(cut.Piece.Body, path.Primitives, faceR, chord))
+                    {
+                        var mapped = outline.Select(q => TubeUnbender.MapPoint(u, q).point).ToList();
+                        pat.Polylines.AddRange(uw.MapLoop(mapped, layer).pieces);
+                    }
+                    approx++;
+                    pat.Warnings.Add("APPROXIMATE (in a bend): " + cut.Description + ". Developed with the centreline bending model; the real position changes with stretch.");
+                }
+                else if (!cut.Through)
+                {
+                    // Exact outline is already in the pattern as a cut-out: move it to the engraving layer.
+                    var box = cut.Piece.Samples.Concat(CutAnalysis.EdgeSamples(cut.Piece.Body, chord))
+                        .Select(q => uw.Map(u.Items[cut.RigidIndex].BentToUnbent.Apply(q))).ToList();
+                    double s0 = box.Min(q => q.s) - chord, s1 = box.Max(q => q.s) + chord;
+                    double a0 = box.Min(q => q.angle) * refR - chord, a1 = box.Max(q => q.angle) * refR + chord;
+                    foreach (var pl in pat.Polylines.Where(x => x.Layer == PatternLayer.InternalCutouts))
+                        if (pl.Points.All(q => q.X >= s0 && q.X <= s1 && q.Y >= a0 && q.Y <= a1)) pl.Layer = PatternLayer.Engraving;
+                }
+            }
+            pat.Simplify(1e-6);
+
             if (surface == UnwrapSurface.Neutral)
                 pat.Warnings.Add("Neutral surface: cut outlines are taken from the outside surface and placed by angle on the mean diameter. " +
                                  "This is exact for radial cuts and approximate for others.");
-            foreach (var n in rep.NotTransferred) pat.Warnings.Add("Not in the pattern: " + n);
             if (rep.MaterialAdded) pat.Warnings.Add("Material added to the tube (bosses, welds) is not in the pattern.");
+            if (approx == 0 && rep.NotTransferred.Count > 0) foreach (var n in rep.NotTransferred) pat.Warnings.Add("Not in the pattern: " + n);
             pat.Warnings.Add("Bend markings show the nominal centreline development (R × angle). No stretch or springback compensation is applied.");
             return pat;
         }
 
-        /// <summary>Points of a loop in order. Each edge is sampled along its curve; edges are chained by nearest end points.</summary>
-        private static List<Vec3> LoopPoints(ILoop2 loop, double chord)
-        {
-            var chains = new List<List<Vec3>>();
-            foreach (var e in SwUtil.Arr<IEdge>((object)loop.GetEdges()))
-            {
-                var curve = e.GetCurve() as ICurve;
-                var cpd = e.GetCurveParams3();
-                if (curve == null || cpd == null) continue;
-                double t0 = cpd.UMinValue, t1 = cpd.UMaxValue;
-                // Length estimate from end points of 16 sub-intervals, then a sample spacing of about 'chord'.
-                int n = 64;
-                var pts = new List<Vec3>();
-                for (int i = 0; i <= n; i++)
-                {
-                    var p = SwUtil.D((object)curve.Evaluate2(t0 + (t1 - t0) * i / n, 0));
-                    if (p != null && p.Length >= 3) pts.Add(SwUtil.V(p));
-                }
-                double len = 0;
-                for (int i = 1; i < pts.Count; i++) len += pts[i].DistanceTo(pts[i - 1]);
-                int m = Math.Max(8, Math.Min(2000, (int)Math.Ceiling(len / chord)));
-                if (m > n)
-                {
-                    pts.Clear();
-                    for (int i = 0; i <= m; i++)
-                    {
-                        var p = SwUtil.D((object)curve.Evaluate2(t0 + (t1 - t0) * i / m, 0));
-                        if (p != null && p.Length >= 3) pts.Add(SwUtil.V(p));
-                    }
-                }
-                if (pts.Count > 1) chains.Add(pts);
-            }
-            var result = new List<Vec3>();
-            if (chains.Count == 0) return result;
-            result.AddRange(chains[0]);
-            chains.RemoveAt(0);
-            while (chains.Count > 0)
-            {
-                var end = result[result.Count - 1];
-                int best = 0; bool rev = false; double bd = double.MaxValue;
-                for (int i = 0; i < chains.Count; i++)
-                {
-                    double d0 = chains[i][0].DistanceTo(end), d1 = chains[i][chains[i].Count - 1].DistanceTo(end);
-                    if (d0 < bd) { bd = d0; best = i; rev = false; }
-                    if (d1 < bd) { bd = d1; best = i; rev = true; }
-                }
-                var next = chains[best];
-                if (rev) next.Reverse();
-                result.AddRange(next.Skip(1));
-                chains.RemoveAt(best);
-            }
-            if (result.Count > 2 && result[0].DistanceTo(result[result.Count - 1]) < 1e-9) result.RemoveAt(result.Count - 1);
-            return result;
-        }
     }
 }

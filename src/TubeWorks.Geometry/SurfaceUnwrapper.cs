@@ -10,6 +10,7 @@ namespace TubeWorks.Geometry
     public struct Point2 { public double X, Y; public Point2(double x, double y) { X = x; Y = y; } public override string ToString() => $"({X:0.######}, {Y:0.######})"; }
 
     public sealed class PatternPolyline { public PatternLayer Layer; public List<Point2> Points = new List<Point2>(); public bool Closed; }
+    public sealed class PatternCircle { public PatternLayer Layer; public Point2 Centre; public double Radius; }
     public sealed class PatternText { public PatternLayer Layer; public Point2 At; public double Height; public string Text; public double RotationDeg; }
 
     /// <summary>2D manufacturing pattern. Coordinates in metres: X along the developed tube, Y around the circumference.</summary>
@@ -17,6 +18,58 @@ namespace TubeWorks.Geometry
     {
         public List<PatternPolyline> Polylines { get; } = new List<PatternPolyline>();
         public List<PatternText> Texts { get; } = new List<PatternText>();
+        public List<PatternCircle> Circles { get; } = new List<PatternCircle>();
+
+        /// <summary>
+        /// Clean-up for CAM: removes points that lie on a straight line between their neighbours (within
+        /// <paramref name="tol"/>), and replaces a closed outline whose points all lie on one circle (within tol) by a
+        /// true circle. Note: a round hole drilled radially through a tube does NOT develop to a circle (it is longer
+        /// around the tube), so it stays a polyline; only outlines that really are circles become circles.
+        /// </summary>
+        public void Simplify(double tol)
+        {
+            for (int k = Polylines.Count - 1; k >= 0; k--)
+            {
+                var pl = Polylines[k];
+                if (pl.Closed && pl.Points.Count >= 8 && TryCircle(pl.Points, tol, out var c, out double r))
+                {
+                    Circles.Add(new PatternCircle { Layer = pl.Layer, Centre = c, Radius = r });
+                    Polylines.RemoveAt(k);
+                    continue;
+                }
+                var pts = pl.Points;
+                var outPts = new List<Point2> { pts[0] };
+                for (int i = 1; i < pts.Count - 1; i++)
+                    if (Dist(outPts[outPts.Count - 1], pts[i + 1], pts[i]) > tol) outPts.Add(pts[i]);
+                outPts.Add(pts[pts.Count - 1]);
+                pl.Points = outPts;
+            }
+        }
+
+        private static double Dist(Point2 a, Point2 b, Point2 p)
+        {
+            double dx = b.X - a.X, dy = b.Y - a.Y, l2 = dx * dx + dy * dy;
+            if (l2 < 1e-30) return Math.Sqrt((p.X - a.X) * (p.X - a.X) + (p.Y - a.Y) * (p.Y - a.Y));
+            double t = Math.Max(0, Math.Min(1, ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / l2));
+            double qx = a.X + t * dx - p.X, qy = a.Y + t * dy - p.Y;
+            return Math.Sqrt(qx * qx + qy * qy);
+        }
+
+        private static bool TryCircle(List<Point2> p, double tol, out Point2 c, out double r)
+        {
+            c = default; r = 0;
+            int n = p.Count;
+            Point2 a = p[0], b = p[n / 3], d = p[2 * n / 3];
+            double det = 2 * (a.X * (b.Y - d.Y) + b.X * (d.Y - a.Y) + d.X * (a.Y - b.Y));
+            if (Math.Abs(det) < 1e-30) return false;
+            double a2 = a.X * a.X + a.Y * a.Y, b2 = b.X * b.X + b.Y * b.Y, d2 = d.X * d.X + d.Y * d.Y;
+            c = new Point2((a2 * (b.Y - d.Y) + b2 * (d.Y - a.Y) + d2 * (a.Y - b.Y)) / det,
+                           (a2 * (d.X - b.X) + b2 * (a.X - d.X) + d2 * (b.X - a.X)) / det);
+            r = Math.Sqrt((a.X - c.X) * (a.X - c.X) + (a.Y - c.Y) * (a.Y - c.Y));
+            foreach (var q in p)
+                if (Math.Abs(Math.Sqrt((q.X - c.X) * (q.X - c.X) + (q.Y - c.Y) * (q.Y - c.Y)) - r) > tol) return false;
+            return true;
+        }
         public List<string> Warnings { get; } = new List<string>();
         public double Length { get; set; }
         public double Width { get; set; }
