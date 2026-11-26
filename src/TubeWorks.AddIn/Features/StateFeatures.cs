@@ -223,7 +223,7 @@ namespace TubeWorks.AddIn.Features
             // Bend start and finish lines on the blank.
             var up = u.UnbentPath;
             var marks = TubeUnbender.Marks(u, up[0].StartPoint, up[0].StartTangent, null);
-            if (marks.Count > 0)
+            if (marks.Count > 0 && UserSettings.Current.MarkBendLinesOnBlank)
             {
                 int rings = c.Builder.ImprintRings(body, up[0].StartPoint, up[0].StartTangent, marks.SelectMany(m => new[] { m.StartS, m.EndS }).Distinct(), c.Path.Profile.OuterRadius);
                 if (rings == 0) rep.NotTransferred.Add("Bend lines could not be marked on the blank (imprint not available); see the bend table or the unwrapped DXF.");

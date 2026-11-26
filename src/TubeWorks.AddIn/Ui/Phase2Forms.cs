@@ -210,19 +210,20 @@ namespace TubeWorks.AddIn.Ui
     internal sealed class DrawingForm : System.Windows.Forms.Form
     {
         private readonly SolidWorks.Interop.sldworks.ISldWorks _app;
-        private readonly SolidWorks.Interop.sldworks.IModelDoc2 _model;
         private readonly System.Windows.Forms.ComboBox _paper = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Width = 120 };
         private readonly System.Windows.Forms.ComboBox _proj = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Width = 220 };
         private readonly System.Windows.Forms.ComboBox _surface = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Width = 220 };
         private readonly System.Windows.Forms.CheckBox _dev = new System.Windows.Forms.CheckBox { Text = "Developed surface pattern on sheet 2", Checked = true, AutoSize = true };
         private readonly System.Windows.Forms.TextBox _template = new System.Windows.Forms.TextBox { Width = 300 };
 
-        public static void ShowFor(SolidWorks.Interop.sldworks.ISldWorks app, SolidWorks.Interop.sldworks.IModelDoc2 model)
-        { using (var f = new DrawingForm(app, model)) f.ShowDialog(new SwWindow(app)); }
+        private Sw.DrawingOptions _result;
+
+        public static Sw.DrawingOptions Ask(SolidWorks.Interop.sldworks.ISldWorks app)
+        { using (var f = new DrawingForm(app, null)) { f.ShowDialog(new SwWindow(app)); return f._result; } }
 
         private DrawingForm(SolidWorks.Interop.sldworks.ISldWorks app, SolidWorks.Interop.sldworks.IModelDoc2 model)
         {
-            _app = app; _model = model;
+            _app = app;
             Text = "TubeWorks Drawing"; Width = 520; Height = 330; FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog; StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
             _paper.Items.AddRange(new object[] { "A4", "A3", "A2", "A1" }); _paper.SelectedIndex = 1;
             _proj.Items.AddRange(new object[] { "First angle (ISO)", "Third angle" }); _proj.SelectedIndex = 0;
@@ -240,22 +241,25 @@ namespace TubeWorks.AddIn.Ui
 
         private void Create()
         {
-            var o = new Sw.DrawingOptions
+            _result = new Sw.DrawingOptions
             {
                 Paper = (Sw.DrawingPaper)System.Math.Max(0, _paper.SelectedIndex), FirstAngle = _proj.SelectedIndex == 0,
                 DevelopedSurface = _dev.Checked, Surface = (TubeWorks.Geometry.UnwrapSurface)System.Math.Max(0, _surface.SelectedIndex), Template = _template.Text.Trim(),
             };
-            Cursor = System.Windows.Forms.Cursors.WaitCursor;
+            Close();
+        }
+
+        /// <summary>Make the drawing (called after the options window has closed).</summary>
+        public static void CreateDrawing(SolidWorks.Interop.sldworks.ISldWorks app, SolidWorks.Interop.sldworks.IModelDoc2 model, Sw.DrawingOptions o)
+        {
             SolidWorks.Interop.sldworks.IModelDoc2 doc;
             System.Collections.Generic.List<string> notes; string err;
-            try { doc = Sw.DrawingGenerator.Create(_app, _model, o, out notes, out err); }
+            try { doc = Sw.DrawingGenerator.Create(app, model, o, out notes, out err); }
             catch (System.Exception ex) { Log.Error("Drawing", ex); doc = null; notes = new System.Collections.Generic.List<string>(); err = ex.Message; }
-            finally { Cursor = System.Windows.Forms.Cursors.Default; }
-            if (doc == null) { System.Windows.Forms.MessageBox.Show(this, "The drawing was not created: " + err, Text); return; }
-            string msg = "Drawing created. Check it before use: view placement and annotations depend on your template.";
+            if (doc == null) { Sw.SwUtil.Message(app, "TubeWorks: the drawing was not created: " + err, SolidWorks.Interop.swconst.swMessageBoxIcon_e.swMbWarning); return; }
+            string msg = "TubeWorks: drawing created. Check it before use: view placement and annotations depend on your template.";
             if (notes.Count > 0) msg += "\n\nNotes:\n" + string.Join("\n", System.Linq.Enumerable.Select(notes, n => "• " + n));
-            System.Windows.Forms.MessageBox.Show(this, msg, Text);
-            Close();
+            Sw.SwUtil.Message(app, msg);
         }
     }
 }

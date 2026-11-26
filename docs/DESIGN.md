@@ -1,12 +1,12 @@
 # TubeWorks Designer — technical design
 
-Release 0.3.0 (Phase 1 and Phase 2). This document contains the 8 deliverables that the specification asks for before the full application.
+Release 0.4.0 (Phases 1, 2 and 3). This document contains the 8 deliverables that the specification asks for before the full application.
 
 **Verification status, stated once for the whole document:**
 
 | What | Status |
 |---|---|
-| Geometry engine (`TubeWorks.Geometry`) | 43 automated tests pass. Expected values come from closed-form hand calculations. The DXF output is also checked independently with ezdxf. |
+| Geometry engine (`TubeWorks.Geometry`) | 51 automated tests pass. Expected values come from closed-form hand calculations. The DXF output is also checked independently with ezdxf. |
 | Add-in compile against SOLIDWORKS 2026 interop (34.1.1.11) | Compiles: 0 errors, 0 warnings. So every API member that the add-in uses exists with the signature that it uses. |
 | Add-in compile against SOLIDWORKS 2016 interop (24.4) | Compiles: 0 errors, 0 warnings (since 0.2.0 the add-in uses `IBody2.Copy` and `SaveAs`). The setup program is built from this. |
 | Setup program (`TubeWorksSetup-0.2.0.exe`, NSIS) | Built; contents checked (42 files, no interop assemblies). Not run on Windows. |
@@ -148,7 +148,7 @@ The start tangent is never changed, so every bend is tangent-continuous by const
 | 1b | Run `TEST-PLAN.md` in SOLIDWORKS; fix runtime issues; macro feature display dimensions; Multi Bend | Next |
 | 2a | Individual unbend/rebend with transfer of cuts; hole and cut-out mapping; Unwrap Tube Surface; DXF with layers; library editor with import/export; validation of cuts in bends; setup program | **Implemented in 0.2.0; Unbend/Flatten/Rebend ran in SOLIDWORKS 2026 SP4; Unbend bug with a fixed segment after a bend fixed in 0.2.2** |
 | 2b | Automatic drawings (views, centreline, straightened view, developed surface, bend table, notes, A4–A1, ISO first angle); engraving layer; DWG through SOLIDWORKS; approximate outlines of cuts in bends (flagged); tooling radius list; stock, tooling and cut-distance checks; bend lines on the blank; Rebend recovery after reopening; Unbend page cut preview | **Implemented in 0.3.0, compile-verified, not yet run in SOLIDWORKS** |
-| 3 | Machine postprocessors; springback and stretch compensation from calibration data; stock optimisation; nesting; cost; batch; reports | Planned |
+| 3 | Machine postprocessors (templates); springback, stretch, neutral axis, tooling offset and trim compensation from calibration data; stock length optimisation and 1D nesting; cost estimation; batch processing; manufacturing reports (HTML) | **Implemented in 0.4.0, engine tested; add-in compile-verified, not yet run in SOLIDWORKS** |
 
 ## 8. Technical risks and limitations
 
@@ -221,3 +221,30 @@ saved with the SOLIDWORKS DWG translator; the temporary drawing is closed withou
 
 **Crash fix (0.3.0).** SOLIDWORKS 2026 SP4 closed with an access violation inside `IFeature.Name` while a Face Bend page refreshed.
 Since 0.3.0 the pages read the feature tree once (names stored as text) and rebuilds never read names of other features.
+
+## Phase 3 design notes (release 0.4)
+
+**No built-in manufacturing values.** Calibration lives in the tube library per preset (tube + tooling + machine), rates and times in
+`production.xml`. Missing data is reported as "not defined" in every output, never replaced by a default.
+
+**Compensation** (`Compensation.Apply`): commanded angle from the inverse of the measured springback curve (piecewise linear,
+linear extrapolation, ratio with one point) plus a tooling offset; developed bend with an optional neutral-axis shift; stretch per
+bend and per degree removed from the cut length; trim allowances added to the first and last feed. The model is stated in every
+output because machines count feed through the die differently.
+
+**Postprocessors** are templates (header / per-bend / footer with placeholders). Unknown placeholders and settings are errors.
+Only generic examples are shipped; a controller format must come from the machine documentation.
+
+**Nesting** (`StockNesting`): 1D cutting stock with saw kerf and bar-end trims, longest-first best-fit, then the shortest stock that
+still holds each bar; available-bar limits are respected. A test compares it with the exact optimum on 200 random cases against the
+first-fit-decreasing bound 11/9·OPT + 6/9.
+
+**Cost** (`CostModel`): material from the bars of the nest (or cut length × price per metre), machine time from the defined process
+times × hourly rate, set-up shared by the batch, optional extra per part.
+
+**Batch** opens each part silently (`OpenDoc6`), analyses and exports it, and closes only the documents it opened.
+
+**Crash fix (0.4.0).** SOLIDWORKS 2026 SP4 closed (unhandled .NET exception e0434352) right after Tube Drawing started; the last API
+calls were the bend-line imprint on the Flat Pattern blank (`CreatePlanarSurface2`, `CreateSheetFromSurface`, `ImprintingFaces`).
+Since 0.4.0 the imprint is off by default (setting `MarkBendLinesOnBlank`), the drawing is created after its options window has
+closed, and WinForms/AppDomain exception handlers log errors instead of ending SOLIDWORKS.

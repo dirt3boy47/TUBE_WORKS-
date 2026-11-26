@@ -1,4 +1,4 @@
-# User guide (release 0.3)
+# User guide (release 0.4)
 
 ## Basic workflow
 
@@ -56,10 +56,57 @@ TubeWorks compares the actual tube with the nominal tube made from the feature p
 - Engraving: a cut that does not reach the bore (marking, engraving, shallow pocket) goes to the ENGRAVING layer; through cuts go to INTERNAL_CUTOUTS.
 - Cuts in a bend appear in the unwrapped pattern as **approximate** outlines, placed with the centreline bending model (each one is listed as APPROXIMATE). They are not moved by Unbend or Flatten.
 - Round holes drilled radially through a tube do not develop to circles (they are longer around the tube). The DXF writes true circles only where the outline really is a circle; other outlines are polylines with collinear points removed.
-- Flatten Tube marks the bend start and finish lines on the blank's outside face.
+- Bend lines on the 3D blank (Flatten Tube) are experimental and **off** since 0.4.0, because SOLIDWORKS 2026 SP4 closed during that step. Set `MarkBendLinesOnBlank` to `true` in `%APPDATA%\TubeWorks\settings.xml` only for testing. Bend lines are always in the DXF, DWG and drawing.
 
 After Ctrl+Q or reopening, run Ctrl+Q once before you edit a Rebend, so that the Unbend data is available.
 
 ## Editing upstream and recovering references
 
 Change any feature: everything downstream rebuilds from the stored parameters. If a feature reports that its parent is missing, edit it and select a tube end face above it in the tree. A tube cannot branch: two features cannot continue the same end.
+
+## Manufacturing (Phase 3)
+
+TubeWorks applies **only data that you enter**. When a value is missing, the output says "not defined" and leaves that item out.
+
+**Where the data lives**
+- *Tube Library* (per tube and tooling): stock lengths and prices, tooling radii, limits, and calibration:
+  springback points (`commanded:achieved` degrees, for example `92:90;46.5:45`), stretch per bend and per degree,
+  neutral-axis shift, angle offset, trim allowances, price per metre.
+- *Production Settings* (from the CNC, Report or Batch windows): hourly rate, set-up hours, times per part
+  (cut, load/unload, per bend, per rotation, feed per metre), extra cost per part, saw kerf and unusable bar ends.
+
+**Compensation model** (check it against a test part on your machine):
+- commanded angle = the measured springback curve read backwards at the design angle, interpolated linearly
+  between points (one point: commanded/achieved ratio), plus the angle offset;
+- developed bend = (CLR + neutral-axis shift) × design angle;
+- cut length = start trim + straights + developed bends − stretch + end trim.
+
+| Command | What it does |
+|---|---|
+| **CNC Output** | Shows and saves the bend data in a machine format made by a postprocessor template. Two generic templates are built in; your own `*.twpost` files go in `%APPDATA%\TubeWorks\post` (format below). |
+| **Manufacturing Report** | HTML report for the active part and a quantity: tube data, compensated bend table, notes, checks, cost, and nesting of the quantity into stock bars. Saved next to the part and opened in the browser (print to PDF from there). |
+| **Batch & Nesting** | Choose a folder of parts and quantities. For each part: CNC file, unwrapped DXF, STEP and bend-table CSV (as ticked). Then parts of the same tube size are nested into stock bars (saw kerf and bar ends included) and one report is written to `TubeWorks output`. |
+
+**Postprocessor template format** (`*.twpost`, plain text). Settings first, then sections:
+
+```
+name=My bender
+extension=.nc
+decimals=2
+unit=mm            # or inch
+rotation=right     # or left: sign convention of R
+rotationrange=0-360   # optional: R from 0 to 360 instead of -180..180
+angle=bend         # or included
+[header]
+; {PART} {MATERIAL} {OD} {WALL} {CUTLENGTH} {NOMINALLENGTH} {BENDS} {DATE}
+[bend]
+; per bend: {N} {L} {R} {A} {A0} {CLR} {X} {Y} {Z}
+[footer]
+; {LAST} = final feed, {CUTLENGTH}
+```
+
+An unknown placeholder or setting stops with an error, so a typing error never gives a wrong file. The templates are generic:
+take the format of your controller from its documentation and prove it with a test part.
+
+**Nesting** uses longest-part-first with best fit, then moves each bar to the shortest stock length that still holds its parts.
+The result is always valid (no bar over-full, every part placed) but not proven optimal; the report shows the utilisation.

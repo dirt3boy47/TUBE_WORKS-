@@ -23,9 +23,12 @@ namespace TubeWorks.Geometry
         public double? MinClampLength { get; set; }
         /// <summary>Optional machine limit; null = 180° default of the validator.</summary>
         public double? MaxBendAngleDeg { get; set; }
-        /// <summary>Calibration data, stored for Phase 3 compensation. TubeWorks does not apply these values yet.</summary>
-        public double? SpringbackDeg { get; set; }
-        public double? StretchPerBend { get; set; }
+        /// <summary>Calibration data for this tube, tooling and machine (springback, stretch, neutral axis, trims).</summary>
+        public CompensationData Compensation { get; set; } = new CompensationData();
+        /// <summary>Material price per metre (optional, for cost estimates).</summary>
+        public double? PricePerMetre { get; set; }
+        /// <summary>Price per stock bar (optional, for the cost of a nest). Same order as <see cref="StockLengths"/>.</summary>
+        public List<double> StockPrices { get; set; } = new List<double>();
         /// <summary>Optional: smallest distance between a cut and a bend tangent point.</summary>
         public double? MinCutDistanceFromBend { get; set; }
         public string Machine { get; set; } = "";
@@ -66,6 +69,8 @@ namespace TubeWorks.Geometry
                 if (!(p.WallThickness > 0) || !(p.WallThickness < p.OuterDiameter / 2)) e.Add($"{n}: wall thickness must be greater than zero and less than half the OD.");
                 if (p.MinBendRadius.HasValue && !(p.MinBendRadius > p.OuterDiameter / 2)) e.Add($"{n}: minimum bend radius must be greater than half the OD.");
                 if (p.BendRadii.Any(r => !(r > p.OuterDiameter / 2))) e.Add($"{n}: every tooling radius must be greater than half the OD.");
+                if (p.StockPrices.Count > 0 && p.StockPrices.Count != p.StockLengths.Count) e.Add($"{n}: give one stock price per stock length, or none.");
+                foreach (var m in Compensation.Check(p.Compensation)) e.Add($"{n}: {m}");
             }
             foreach (var g in Presets.GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
                 e.Add($"Duplicate preset name: {g.Key}");
@@ -82,8 +87,9 @@ namespace TubeWorks.Geometry
         private static readonly string[] Header =
         {
             "Name", "Material", "OD (mm)", "Wall (mm)", "Stock lengths (mm)", "Bend radii (mm)", "Min CLR (mm)",
-            "Min straight between bends (mm)", "Min clamp length (mm)", "Max bend angle (deg)", "Springback (deg)", "Stretch per bend (mm)", "Machine", "Tooling",
-            "Min cut distance from bend (mm)",
+            "Min straight between bends (mm)", "Min clamp length (mm)", "Max bend angle (deg)", "Springback (commanded:achieved deg)", "Stretch per bend (mm)", "Machine", "Tooling",
+            "Min cut distance from bend (mm)", "Stretch per degree (mm)", "Neutral axis shift (mm)", "Angle offset (deg)", "Trim start (mm)", "Trim end (mm)",
+            "Price per metre", "Stock prices (per bar)",
         };
 
         public string ToCsv()
@@ -95,7 +101,10 @@ namespace TubeWorks.Geometry
                 {
                     Q(p.Name), Q(p.Material), Mm(p.OuterDiameter), Mm(p.WallThickness), Q(string.Join(";", p.StockLengths.Select(Mm))),
                     Q(string.Join(";", p.BendRadii.Select(Mm))), Mm(p.MinBendRadius), Mm(p.MinStraightBetweenBends), Mm(p.MinClampLength),
-                    D(p.MaxBendAngleDeg), D(p.SpringbackDeg), Mm(p.StretchPerBend), Q(p.Machine), Q(p.Tooling), Mm(p.MinCutDistanceFromBend),
+                    D(p.MaxBendAngleDeg), Q(string.Join(";", p.Compensation.Springback.Select(x => D(x.CommandedDeg) + ":" + D(x.AchievedDeg)))), Mm(p.Compensation.ElongationPerBend),
+                    Q(p.Machine), Q(p.Tooling), Mm(p.MinCutDistanceFromBend), Mm(p.Compensation.ElongationPerDegree), Mm(p.Compensation.NeutralAxisShift),
+                    D(p.Compensation.AngleOffsetDeg), Mm(p.Compensation.TrimStart), Mm(p.Compensation.TrimEnd), D(p.PricePerMetre),
+                    Q(string.Join(";", p.StockPrices.Select(x => D(x)))),
                 }));
             return sb.ToString();
         }
@@ -120,7 +129,20 @@ namespace TubeWorks.Geometry
                 {
                     Name = Get(0), Material = Get(1), OuterDiameter = Parse(Get(2), r) / 1000, WallThickness = Parse(Get(3), r) / 1000,
                     StockLengths = List(4), BendRadii = List(5), MinBendRadius = Opt(6, 0.001), MinStraightBetweenBends = Opt(7, 0.001),
-                    MinClampLength = Opt(8, 0.001), MaxBendAngleDeg = Opt(9, 1), SpringbackDeg = Opt(10, 1), StretchPerBend = Opt(11, 0.001),
+                    MinClampLength = Opt(8, 0.001), MaxBendAngleDeg = Opt(9, 1),
+                    Compensation = new CompensationData
+                    {
+                        Springback = Get(10).Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).Select(x =>
+                        {
+                            var ab = x.Split(':');
+                            if (ab.Length != 2) throw new FormatException($"Row {r + 1}: springback points are written commanded:achieved, for example 92:90.");
+                            return new SpringbackPoint { CommandedDeg = Parse(ab[0], r), AchievedDeg = Parse(ab[1], r) };
+                        }).ToList(),
+                        ElongationPerBend = Opt(11, 0.001), ElongationPerDegree = Opt(15, 0.001), NeutralAxisShift = Opt(16, 0.001), AngleOffsetDeg = Opt(17, 1),
+                        TrimStart = Opt(18, 0.001) ?? 0, TrimEnd = Opt(19, 0.001) ?? 0,
+                    },
+                    PricePerMetre = Opt(20, 1),
+                    StockPrices = Get(21).Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).Select(v => Parse(v, r)).ToList(),
                     Machine = Get(12), Tooling = Get(13), MinCutDistanceFromBend = Opt(14, 0.001),
                 });
             }

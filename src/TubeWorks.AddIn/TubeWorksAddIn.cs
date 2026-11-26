@@ -36,7 +36,7 @@ namespace TubeWorks.AddIn
         /// <summary>The 17 commands of the Tube Design tab. Planned ones are shown disabled, never as working.</summary>
         internal sealed class Cmd
         {
-            public int Index; public string Name, Tip, Callback; public bool Implemented;
+            public int Index; public string Name, Tip, Callback; public bool Implemented, AnyDocument;
         }
 
         internal static readonly Cmd[] Commands =
@@ -59,6 +59,9 @@ namespace TubeWorks.AddIn
             new Cmd { Name = "Tube Properties", Tip = "Profile, material and developed length", Callback = nameof(OnTubeProperties), Implemented = true },
             new Cmd { Name = "Manufacturing Check", Tip = "Check bend radii, straights, angles, self-intersection and cuts in bends", Callback = nameof(OnManufacturingCheck), Implemented = true },
             new Cmd { Name = "Tube Library", Tip = "Edit tube presets, tooling radii and limits; import and export", Callback = nameof(OnLibrary), Implemented = true },
+            new Cmd { Name = "CNC Output", Tip = "Compensated bend data (springback, stretch, trims from the library) through a postprocessor template", Callback = nameof(OnCnc), Implemented = true },
+            new Cmd { Name = "Manufacturing Report", Tip = "HTML report: data, checks, cost and stock for a quantity", Callback = nameof(OnReport), Implemented = true },
+            new Cmd { Name = "Batch & Nesting", Tip = "Process a folder of parts: CNC files, DXF, STEP, nesting into stock bars, cost, one report", Callback = nameof(OnBatch), Implemented = true, AnyDocument = true },
             new Cmd { Name = "Tube Drawing", Tip = "Manufacturing drawing: views, centreline, straightened tube, developed surface, bend table (A4–A1)", Callback = nameof(OnDrawing), Implemented = true },
         };
 
@@ -72,6 +75,7 @@ namespace TubeWorks.AddIn
                 App = (ISldWorks)ThisSW;
                 _cookie = Cookie;
                 App.SetAddinCallbackInfo2(0, this, _cookie);
+                InstallExceptionGuards();
                 _cmdMgr = App.GetCommandManager(_cookie);
                 AddCommands();
                 return true;
@@ -81,6 +85,22 @@ namespace TubeWorks.AddIn
                 Log.Error("ConnectToSW", ex);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Exceptions in TubeWorks windows are logged and shown, instead of ending SOLIDWORKS. Another add-in may already
+        /// have chosen the WinForms exception mode; then that choice is kept and only the logging handler is added.
+        /// </summary>
+        private void InstallExceptionGuards()
+        {
+            try { System.Windows.Forms.Application.SetUnhandledExceptionMode(System.Windows.Forms.UnhandledExceptionMode.CatchException); }
+            catch (InvalidOperationException) { }
+            System.Windows.Forms.Application.ThreadException += (s, e) =>
+            {
+                Log.Error("Unhandled (window)", e.Exception);
+                try { SwUtil.Message(App, "TubeWorks error: " + e.Exception.Message + "\nDetails are in %APPDATA%\\TubeWorks\\tubeworks.log.", swMessageBoxIcon_e.swMbStop); } catch { }
+            };
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => { if (e.ExceptionObject is Exception ex) Log.Error("Unhandled (domain)", ex); };
         }
 
         public bool DisconnectFromSW()
@@ -118,7 +138,7 @@ namespace TubeWorks.AddIn
             for (int i = 0; i < Commands.Length; i++)
             {
                 var c = Commands[i];
-                c.Index = grp.AddCommandItem2(c.Name, -1, c.Tip, c.Name, i, c.Callback, c.Implemented ? nameof(EnablePart) : nameof(EnableNever), i, menuTb);
+                c.Index = grp.AddCommandItem2(c.Name, -1, c.Tip, c.Name, i, c.Callback, !c.Implemented ? nameof(EnableNever) : c.AnyDocument ? nameof(EnableAlways) : nameof(EnablePart), i, menuTb);
             }
             grp.HasToolbar = true;
             grp.HasMenu = true;
@@ -141,6 +161,7 @@ namespace TubeWorks.AddIn
 
         public int EnablePart() => App?.ActiveDoc is IPartDoc ? 1 : 0;
         public int EnableNever() => 0;
+        public int EnableAlways() => 1;
 
         // ------------------------------------------------------------------ command callbacks
 
@@ -212,7 +233,17 @@ namespace TubeWorks.AddIn
             else UnbendPage.ShowReport(App, m, data.Id, "Rebend");
         });
 
-        public void OnDrawing() => Run("Tube Drawing", m => DrawingForm.ShowFor(App, m));
+        public void OnCnc() => Run("CNC Output", m => CncForm.ShowFor(App, m));
+        public void OnReport() => Run("Manufacturing Report", m => ReportForm.ShowFor(App, m));
+        public void OnBatch() { try { BatchForm.ShowFor(App); } catch (Exception ex) { Log.Error("Batch", ex); SwUtil.Message(App, ex.Message, swMessageBoxIcon_e.swMbStop); } }
+
+        public void OnDrawing() => Run("Tube Drawing", m =>
+        {
+            // The options window only collects the options; the drawing is made after it has closed.
+            var o = DrawingForm.Ask(App);
+            if (o == null) return;
+            DrawingForm.CreateDrawing(App, m, o);
+        });
 
         public void OnUnwrap() => Run("Unwrap Tube Surface", m => UnwrapForm.ShowFor(App, m));
 

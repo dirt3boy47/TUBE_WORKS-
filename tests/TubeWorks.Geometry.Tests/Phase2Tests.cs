@@ -311,13 +311,19 @@ namespace TubeWorks.Geometry.Tests
         public void Library_CsvAndXmlRoundTrip_AndChecks()
         {
             var lib = new TubeLibrary();
-            lib.Presets.Add(new TubePreset { Name = "A, \"quoted\"", Material = "304", OuterDiameter = 0.0254, WallThickness = 0.00165, BendRadii = { 0.0381, 0.0508 }, StockLengths = { 6.0 }, MinBendRadius = 0.0381, MaxBendAngleDeg = 185 });
+            lib.Presets.Add(new TubePreset { Name = "A, \"quoted\"", Material = "304", OuterDiameter = 0.0254, WallThickness = 0.00165, BendRadii = { 0.0381, 0.0508 }, StockLengths = { 6.0 }, MinBendRadius = 0.0381, MaxBendAngleDeg = 185,
+                PricePerMetre = 14.5, StockPrices = { 87 },
+                Compensation = new CompensationData { Springback = { new SpringbackPoint { CommandedDeg = 92, AchievedDeg = 90 }, new SpringbackPoint { CommandedDeg = 46.5, AchievedDeg = 45 } }, ElongationPerBend = 0.0004, NeutralAxisShift = -0.0005, TrimStart = 0.005 } });
             lib.Presets.Add(new TubePreset { Name = "B", OuterDiameter = 0.02, WallThickness = 0.0015 });
             var csv = lib.ToCsv();
             var back = TubeLibrary.FromCsv(csv);
             Assert.Equal(csv, back.ToCsv());
             Assert.Null(back.Presets[1].MinBendRadius);
             Assert.Equal(0.0508, back.Presets[0].BendRadii[1], 12);
+            Assert.Equal(2, back.Presets[0].Compensation.Springback.Count);
+            Assert.Equal(46.5, back.Presets[0].Compensation.Springback[1].CommandedDeg, 12);
+            Assert.Equal(-0.0005, back.Presets[0].Compensation.NeutralAxisShift.Value, 12);
+            Assert.Equal(87, back.Presets[0].StockPrices[0], 12);
             using (var ms = new MemoryStream()) { lib.WriteXml(ms); ms.Position = 0; Assert.Equal(csv, TubeLibrary.ReadXml(ms).ToCsv()); }
             Assert.Empty(lib.Check());
             Assert.Equal(Rad(185), lib.RulesFor(TubeProfile.FromOdWall(0.0254, 0.00165)).MaxBendAngle.Value, 12);

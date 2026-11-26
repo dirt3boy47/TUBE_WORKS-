@@ -20,6 +20,11 @@ namespace TubeWorks.AddIn
         public bool ShowCentreline { get; set; } = true;
         /// <summary>Check every created body against its analytic volume. Switch off only for diagnosis.</summary>
         public bool VerifyGeometry { get; set; } = true;
+        /// <summary>
+        /// Experimental: imprint bend start/finish lines on the Flat Pattern blank. Off by default since 0.4.0 because
+        /// SOLIDWORKS 2026 SP4 closed during this step (crash report of 2026-11-26). Bend lines are always in the DXF, DWG and drawing.
+        /// </summary>
+        public bool MarkBendLinesOnBlank { get; set; }
         public RotationSign RotationSign { get; set; } = RotationSign.RightHandAboutFeed;
         public AngleConvention AngleConvention { get; set; } = AngleConvention.BendAngle;
         public LengthUnit TableUnit { get; set; } = LengthUnit.Millimetre;

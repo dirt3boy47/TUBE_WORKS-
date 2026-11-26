@@ -22,7 +22,7 @@ RED = (200, 40, 40, 255)
 
 # Order must match TubeWorksAddIn.Commands.
 COMMANDS = ["base", "bend", "straight", "edit", "reverse", "multi", "plane", "trim", "notch",
-            "unbend", "rebend", "flatten", "unwrap", "export", "table", "props", "check", "library", "drawing"]
+            "unbend", "rebend", "flatten", "unwrap", "export", "table", "props", "check", "library", "cnc", "report", "batch", "drawing"]
 PLANNED = {"multi", "trim", "notch"}
 
 
@@ -91,6 +91,19 @@ def draw(name):
         for i, x in enumerate((18, 46, 74)):
             d.rectangle([x, 20, x + 22, 110], outline=DARK, width=6)
         d.line([(100, 24), (118, 108)], fill=c, width=14)
+    elif name == "cnc":
+        d.rectangle([14, 30, 114, 98], outline=DARK, width=6)
+        for x, y in ((30, 50), (30, 66), (30, 82)):
+            d.line([(x, y), (98, y)], fill=c, width=6)
+    elif name == "report":
+        d.rectangle([24, 10, 104, 118], outline=DARK, width=6)
+        for y in (34, 52, 70):
+            d.line([(38, y), (90, y)], fill=c, width=6)
+        d.line([(38, 92), (60, 92)], fill=ORANGE, width=10)
+    elif name == "batch":
+        for k in range(3):
+            d.rectangle([14 + k * 14, 14 + k * 14, 84 + k * 14, 84 + k * 14], outline=DARK, fill=(255, 255, 255, 255), width=6)
+        tube(d, 50, 96, 110, 96, 12, c)
     elif name == "drawing":
         d.rectangle([12, 14, 116, 114], outline=DARK, width=6)
         d.rectangle([76, 90, 116, 114], outline=DARK, width=5)

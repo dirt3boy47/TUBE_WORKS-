@@ -1,0 +1,15 @@
+# GENERIC EXAMPLE ONLY - not the format of a particular machine. Adapt it to your controller's documentation.
+name=Example YBC text
+extension=.ybc
+decimals=2
+unit=mm
+rotation=right
+rotationrange=0-360
+angle=bend
+[header]
+; PART {PART}  TUBE {OD}x{WALL}  MATERIAL {MATERIAL}  CUT {CUTLENGTH}  DATE {DATE}
+[bend]
+Y{L} B{R} C{A}   ; bend {N}, design {A0} deg, CLR {CLR}
+[footer]
+Y{LAST}
+; END

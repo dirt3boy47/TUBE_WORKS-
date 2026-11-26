@@ -2,7 +2,7 @@
 
 ## A. Automated (no SOLIDWORKS)
 
-`dotnet test tests/TubeWorks.Geometry.Tests` — 43 tests, all pass in the build environment. Expected values are closed-form hand calculations, not engine output.
+`dotnet test tests/TubeWorks.Geometry.Tests` — 51 tests, all pass in the build environment. Expected values are closed-form hand calculations, not engine output.
 
 | Acceptance case | Test |
 |---|---|
@@ -28,6 +28,11 @@
 | Unbend with any fixed segment (bug in 0.2.1, fixed in 0.2.2) | `Unbend_AnyFixedSegment_IsContinuousAndKeepsLength` (fails on 0.2.1 for a fixed segment after a bend) |
 | Approximate mapping of points in bends | `MapPoint_ExactInStraights_ContinuousAcrossBends_AndArcLengthInBends` |
 | Tooling, stock, cut distance checks | `Validator_ToolingStockAndCutDistance` |
+| Springback interpolation, compensation formula | `Springback_Interpolation`, `NoCalibration_GivesNominalValues_AndSaysSo`, `Compensation_CutLengthFormula` |
+| Postprocessor templates | `Postprocessor_Template_OutputAndErrors` |
+| Stock nesting | `Nesting_ValidAndUsesShortestFittingStock`, `Nesting_MatchesOptimum_OnSmallRandomCases` (200 random cases against the exact optimum, first-fit-decreasing bound) |
+| Cost model | `Cost_OnlyDefinedItems` |
+| Report | `Report_IsHtml_AndEscapesText` |
 | DXF clean-up and true circles | `Pattern_Simplify_RemovesCollinearPoints_AndFindsTrueCircles_Only` |
 
 Also automated: the add-in compiles against the SOLIDWORKS 2026 interop (CI workflow).
@@ -77,8 +82,12 @@ Use a new part in mm. Record pass/fail and the SOLIDWORKS version. On any failur
 | UB-5 | Unbend with the LAST straight fixed (0.2.1 bug) | Bent part unchanged; the straightened part is continuous and its total length equals the developed length |
 | ENG-1 | Shallow extruded cut (0.3 mm deep text or mark) on a straight, then Unwrap | Outline on ENGRAVING layer, not INTERNAL_CUTOUTS |
 | UW-3 | Hole in a bend, then Unwrap | Outline present, listed as APPROXIMATE |
-| FP-4 | Flatten a two-bend tube | Lines (split edges) on the blank at the bend start and finish positions of the bend table |
+| FP-4 | (experimental, off by default; set MarkBendLinesOnBlank=true) Flatten a two-bend tube | Lines (split edges) on the blank at the bend start and finish positions of the bend table |
 | TL-1 | Library preset with radii 38.1 and 50.8; Face Bend on that tube | Radius list offers both; choosing one sets the CLR; a radius not in the list gives a NO_TOOLING warning in Manufacturing Check |
-| DRW-1 | Save the part; Tube Drawing, A3, first angle | Drawing with 2 sheets: 4 views + centreline + bend table + notes; sheet 2 straightened view (TW Straight) + developed surface |
+| DRW-1 | (crashed in 0.3.0; fixed in 0.4.0) Save the part; Tube Drawing, A3, first angle | Drawing with 2 sheets: 4 views + centreline + bend table + notes; sheet 2 straightened view (TW Straight) + developed surface |
 | DWG-1 | Unwrap → Export DWG… | DWG opens in a DWG viewer at 1:1 mm with the TubeWorks layer names |
+| CNC-1 | Library preset with springback `92:90`, trim start 5 mm; CNC Output, Generic LRA | Bend 1 commanded 92.00 for a 90° bend; first feed +5 mm; notes list what was applied |
+| CNC-2 | Copy `docs/postprocessors/example-ybc.twpost` to `%APPDATA%\TubeWorks\post`, edit it, select it | Output follows the template; an unknown placeholder shows an error |
+| REP-1 | Production Settings: hourly rate, times; library stock 6000 mm with price; Manufacturing Report, quantity 20 | HTML opens; cost lines only for defined items; nest uses 6000 mm bars |
+| BAT-1 | Folder with 3 TubeWorks parts and 1 non-tube part; Batch & Nesting with all outputs | Output folder with CNC, DXF, STEP, CSV per tube part; the non-tube part listed as not processed; one combined report with a nest per tube size |
 | RB-2 | Unbend with a hole in a bend; save, close, reopen; edit a cut between Unbend and Rebend | Rebend rebuilds without the "Ctrl+Q" error (when SOLIDWORKS provides the Unbend input body) |
