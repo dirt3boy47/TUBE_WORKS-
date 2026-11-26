@@ -214,38 +214,66 @@ namespace TubeWorks.AddIn.Ui
         private readonly System.Windows.Forms.ComboBox _proj = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Width = 220 };
         private readonly System.Windows.Forms.ComboBox _surface = new System.Windows.Forms.ComboBox { DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList, Width = 220 };
         private readonly System.Windows.Forms.CheckBox _dev = new System.Windows.Forms.CheckBox { Text = "Developed surface pattern on sheet 2", Checked = true, AutoSize = true };
-        private readonly System.Windows.Forms.TextBox _template = new System.Windows.Forms.TextBox { Width = 300 };
-
+        private readonly System.Windows.Forms.ComboBox _template = new System.Windows.Forms.ComboBox { Width = 330, DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDown };
         private Sw.DrawingOptions _result;
 
         public static Sw.DrawingOptions Ask(SolidWorks.Interop.sldworks.ISldWorks app)
         { using (var f = new DrawingForm(app, null)) { f.ShowDialog(new SwWindow(app)); return f._result; } }
 
+        /// <summary>Drawing templates (*.drwdot) in the SOLIDWORKS template folders (Tools > Options > File Locations > Document Templates).</summary>
+        private static System.Collections.Generic.List<string> FindTemplates(SolidWorks.Interop.sldworks.ISldWorks app)
+        {
+            var list = new System.Collections.Generic.List<string>();
+            try
+            {
+                string folders = app.GetUserPreferenceStringValue((int)SolidWorks.Interop.swconst.swUserPreferenceStringValue_e.swFileLocationsDocumentTemplates) ?? "";
+                foreach (var dir in folders.Split(';'))
+                    if (System.IO.Directory.Exists(dir.Trim()))
+                        list.AddRange(System.IO.Directory.GetFiles(dir.Trim(), "*.drwdot", System.IO.SearchOption.AllDirectories));
+            }
+            catch (System.Exception ex) { Log.Error("Find templates", ex); }
+            return System.Linq.Enumerable.ToList(System.Linq.Enumerable.Distinct(list, System.StringComparer.OrdinalIgnoreCase));
+        }
+
         private DrawingForm(SolidWorks.Interop.sldworks.ISldWorks app, SolidWorks.Interop.sldworks.IModelDoc2 model)
         {
             _app = app;
-            Text = "TubeWorks Drawing"; Width = 520; Height = 330; FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog; StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            _paper.Items.AddRange(new object[] { "A4", "A3", "A2", "A1" }); _paper.SelectedIndex = 1;
+            Text = "TubeWorks Drawing"; Width = 600; Height = 340; FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog; StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
+            _paper.Items.AddRange(new object[] { "From the template", "A4", "A3", "A2", "A1" }); _paper.SelectedIndex = 0;
             _proj.Items.AddRange(new object[] { "First angle (ISO)", "Third angle" }); _proj.SelectedIndex = 0;
             _surface.Items.AddRange(new object[] { "Outside surface", "Inside surface", "Neutral surface" }); _surface.SelectedIndex = 0;
-            _template.Text = app.GetUserPreferenceStringValue((int)SolidWorks.Interop.swconst.swUserPreferenceStringValue_e.swDefaultTemplateDrawing);
-            var t = new System.Windows.Forms.TableLayoutPanel { Dock = System.Windows.Forms.DockStyle.Fill, ColumnCount = 2, Padding = new System.Windows.Forms.Padding(8) };
-            void Row(string l, System.Windows.Forms.Control c) { t.Controls.Add(new System.Windows.Forms.Label { Text = l, AutoSize = true }); t.Controls.Add(c); }
-            Row("Sheet size", _paper); Row("Projection", _proj); Row("Drawing template", _template); Row("", _dev); Row("Developed surface", _surface);
+            foreach (var t in FindTemplates(app)) _template.Items.Add(t);
+            string last = UserSettings.Current.LastDrawingTemplate;
+            _template.Text = !string.IsNullOrEmpty(last) && System.IO.File.Exists(last) ? last
+                : app.GetUserPreferenceStringValue((int)SolidWorks.Interop.swconst.swUserPreferenceStringValue_e.swDefaultTemplateDrawing);
+            var browse = new System.Windows.Forms.Button { Text = "Browse…", AutoSize = true };
+            browse.Click += (o, e) =>
+            {
+                using (var d = new System.Windows.Forms.OpenFileDialog { Filter = "SOLIDWORKS drawing template (*.drwdot)|*.drwdot", FileName = _template.Text })
+                    if (d.ShowDialog(this) == System.Windows.Forms.DialogResult.OK) _template.Text = d.FileName;
+            };
+            var tp = new System.Windows.Forms.FlowLayoutPanel { AutoSize = true, Margin = new System.Windows.Forms.Padding(0) };
+            tp.Controls.Add(_template); tp.Controls.Add(browse);
+            var t2 = new System.Windows.Forms.TableLayoutPanel { Dock = System.Windows.Forms.DockStyle.Fill, ColumnCount = 2, Padding = new System.Windows.Forms.Padding(8) };
+            void Row(string l, System.Windows.Forms.Control c) { t2.Controls.Add(new System.Windows.Forms.Label { Text = l, AutoSize = true }); t2.Controls.Add(c); }
+            Row("Drawing template", tp); Row("Sheet size", _paper); Row("Projection", _proj); Row("", _dev); Row("Developed surface", _surface);
             var ok = new System.Windows.Forms.Button { Text = "Create drawing", AutoSize = true };
             ok.Click += (o, e) => Create();
             Row("", ok);
-            Row("", new System.Windows.Forms.Label { Text = "The part must be saved. A configuration \"TW Straight\" is added for the straightened view.", AutoSize = true, ForeColor = System.Drawing.Color.DimGray });
-            Controls.Add(t);
+            Row("", new System.Windows.Forms.Label { Text = "\"From the template\" keeps the template's sheet size, border and title block.\nThe part must be saved. A configuration \"TW Straight\" is added for the straightened view.", AutoSize = true, ForeColor = System.Drawing.Color.DimGray });
+            Controls.Add(t2);
         }
 
         private void Create()
         {
             _result = new Sw.DrawingOptions
             {
-                Paper = (Sw.DrawingPaper)System.Math.Max(0, _paper.SelectedIndex), FirstAngle = _proj.SelectedIndex == 0,
+                Paper = _paper.SelectedIndex <= 0 ? (Sw.DrawingPaper?)null : (Sw.DrawingPaper)(_paper.SelectedIndex - 1), FirstAngle = _proj.SelectedIndex == 0,
                 DevelopedSurface = _dev.Checked, Surface = (TubeWorks.Geometry.UnwrapSurface)System.Math.Max(0, _surface.SelectedIndex), Template = _template.Text.Trim(),
             };
+            if (_result.Template.Length > 0 && !System.IO.File.Exists(_result.Template))
+            { System.Windows.Forms.MessageBox.Show(this, "The template file does not exist: " + _result.Template, Text); _result = null; return; }
+            UserSettings.Current.LastDrawingTemplate = _result.Template; UserSettings.Current.Save();
             Close();
         }
 

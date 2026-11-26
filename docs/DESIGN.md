@@ -248,3 +248,8 @@ times × hourly rate, set-up shared by the batch, optional extra per part.
 calls were the bend-line imprint on the Flat Pattern blank (`CreatePlanarSurface2`, `CreateSheetFromSurface`, `ImprintingFaces`).
 Since 0.4.0 the imprint is off by default (setting `MarkBendLinesOnBlank`), the drawing is created after its options window has
 closed, and WinForms/AppDomain exception handlers log errors instead of ending SOLIDWORKS.
+
+**Drawing fixes (0.4.1)**, from the owner's screenshot of the 0.4.0 drawing: sheet-sketch geometry was drawn 1/scale too small because
+SOLIDWORKS multiplies sheet-sketch coordinates by the sheet scale (now divided by the sheet scale; notes stay in paper coordinates);
+the active layer is restored after drawing (tables and notes were on the TEXT layer); the template's sheet format and size are kept
+(the sheet format was removed before). Added: template choice and the bending layout of the straight bar (`BendingLayout`).

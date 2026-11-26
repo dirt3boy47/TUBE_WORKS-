@@ -175,3 +175,37 @@ namespace TubeWorks.Geometry.Tests
         }
     }
 }
+
+namespace TubeWorks.Geometry.Tests
+{
+    public class BendingLayoutTests
+    {
+        [Fact]
+        public void Steps_MatchTheDrawingInTheScreenshot()
+        {
+            // Screenshot case: feed 50, bend 45° R100, bend 45° R100 rotated 35°, no straight between.
+            var b = new TubeFeatureData { Kind = TubeFeatureKind.BaseTube, OuterDiameter = 0.065, WallThickness = 0.002, Axis = Vec3.UnitX, Length = 0.05 };
+            var b1 = new TubeFeatureData { Kind = TubeFeatureKind.Bend, ParentId = b.Id, BendRadius = 0.1, BendAngle = Math.PI / 4 };
+            var b2 = new TubeFeatureData { Kind = TubeFeatureKind.Bend, ParentId = b1.Id, BendRadius = 0.1, BendAngle = Math.PI / 4, PlaneRotation = 35 * Math.PI / 180 };
+            var r = TubeChainSolver.Solve(new[] { b, b1, b2 }.Select(d => new ChainInput { Data = d }).ToList());
+            var t = BendTable.Build(r.Paths[0].Primitives);
+            var steps = BendingLayout.Steps(t);
+            double arc = 0.1 * Math.PI / 4; // 78.54 mm
+            Assert.Equal(0.05, steps[0].MarkStart, 12);
+            Assert.Equal(0.05 + arc / 2, steps[0].MarkCentre, 12);
+            Assert.Equal(0.05 + arc, steps[1].MarkStart, 12);           // 128.54 mm
+            Assert.Equal(45, steps[1].DesignDeg, 9);
+            Assert.Equal(0.05 + 2 * arc, t.TotalDevelopedLength, 12);    // 207.08 mm
+
+            // With a start trim of 5 mm and springback 46:45, marks move by 5 mm and the command angle is 46°.
+            var c = Compensation.Apply(t, new CompensationData { TrimStart = 0.005, Springback = { new SpringbackPoint { CommandedDeg = 46, AchievedDeg = 45 } } });
+            var s2 = BendingLayout.Steps(t, c);
+            Assert.Equal(0.055, s2[0].MarkStart, 12);
+            Assert.Equal(46, s2[0].CommandDeg, 9);
+            var pat = BendingLayout.Build(t, 0.065, c, 0.003);
+            Assert.Contains(pat.Texts, x => x.Text.StartsWith("B2  MARK 133.5  ROTATE"));
+            Assert.Contains(pat.Texts, x => x.Text.Contains("COMMAND 46°"));
+            Assert.Equal(c.CutLength, pat.Length, 12);
+        }
+    }
+}

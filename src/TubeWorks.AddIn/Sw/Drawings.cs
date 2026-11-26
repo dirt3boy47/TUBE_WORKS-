@@ -14,7 +14,8 @@ namespace TubeWorks.AddIn.Sw
 
     internal sealed class DrawingOptions
     {
-        public DrawingPaper Paper = DrawingPaper.A3;
+        /// <summary>Null = keep the sheet size and sheet format of the template.</summary>
+        public DrawingPaper? Paper = null;
         public string Template = "";
         public bool FirstAngle = true; // ISO
         public bool DevelopedSurface = true;
@@ -40,12 +41,19 @@ namespace TubeWorks.AddIn.Sw
                 if (lm.GetLayer(names.Names[l]) == null) lm.AddLayer(names.Names[l], "TubeWorks " + l, Colours[l], 0, 0);
         }
 
-        /// <summary>Draw a pattern with its lower-left corner at (x0, y0) on the sheet (metres of paper), at <paramref name="scale"/>.</summary>
-        public static void Draw(IModelDoc2 drawing, Pattern2D pat, double x0, double y0, double scale, DxfLayerSettings names)
+        /// <summary>
+        /// Draw a pattern with its lower-left corner at (x0, y0) on the sheet (metres of paper), at <paramref name="scale"/>.
+        /// SOLIDWORKS multiplies sheet-sketch coordinates by the sheet scale, so sketch points are divided by
+        /// <paramref name="sheetScale"/> (notes are placed in paper coordinates and are not). The active layer is restored.
+        /// </summary>
+        public static void Draw(IModelDoc2 drawing, Pattern2D pat, double x0, double y0, double scale, DxfLayerSettings names, double sheetScale = 1.0)
         {
             var sm = drawing.SketchManager;
             var lm = drawing.GetLayerManager() as ILayerMgr;
+            string previousLayer = null;
+            try { previousLayer = lm?.GetCurrentLayer(); } catch { }
             EnsureLayers(drawing, names);
+            double inv = 1.0 / sheetScale;
             bool addToDb = sm.AddToDB, display = sm.DisplayWhenAdded;
             sm.AddToDB = true; sm.DisplayWhenAdded = false;
             try
@@ -56,14 +64,14 @@ namespace TubeWorks.AddIn.Sw
                     foreach (var pl in g)
                     {
                         var pts = pl.Points;
-                        for (int i = 1; i < pts.Count; i++) Line(sm, pts[i - 1], pts[i], x0, y0, scale);
-                        if (pl.Closed && pts.Count > 2) Line(sm, pts[pts.Count - 1], pts[0], x0, y0, scale);
+                        for (int i = 1; i < pts.Count; i++) Line(sm, pts[i - 1], pts[i], x0, y0, scale, inv);
+                        if (pl.Closed && pts.Count > 2) Line(sm, pts[pts.Count - 1], pts[0], x0, y0, scale, inv);
                     }
                 }
                 foreach (var c in pat.Circles)
                 {
                     lm?.SetCurrentLayer(names.Names[c.Layer]);
-                    sm.CreateCircleByRadius(x0 + c.Centre.X * scale, y0 + c.Centre.Y * scale, 0, c.Radius * scale);
+                    sm.CreateCircleByRadius((x0 + c.Centre.X * scale) * inv, (y0 + c.Centre.Y * scale) * inv, 0, c.Radius * scale * inv);
                 }
             }
             finally { sm.AddToDB = addToDb; sm.DisplayWhenAdded = display; }
@@ -72,10 +80,11 @@ namespace TubeWorks.AddIn.Sw
                 lm?.SetCurrentLayer(names.Names[t.Layer]);
                 Note(drawing, t.Text, x0 + t.At.X * scale, y0 + t.At.Y * scale, Math.Max(0.0025, t.Height * scale));
             }
+            try { if (lm != null) lm.SetCurrentLayer(string.IsNullOrEmpty(previousLayer) ? "" : previousLayer); } catch { }
         }
 
-        private static void Line(ISketchManager sm, Point2 a, Point2 b, double x0, double y0, double k) =>
-            sm.CreateLine(x0 + a.X * k, y0 + a.Y * k, 0, x0 + b.X * k, y0 + b.Y * k, 0);
+        private static void Line(ISketchManager sm, Point2 a, Point2 b, double x0, double y0, double k, double inv) =>
+            sm.CreateLine((x0 + a.X * k) * inv, (y0 + a.Y * k) * inv, 0, (x0 + b.X * k) * inv, (y0 + b.Y * k) * inv, 0);
 
         public static void Note(IModelDoc2 doc, string text, double x, double y, double height = 0.0035)
         {
@@ -133,10 +142,23 @@ namespace TubeWorks.AddIn.Sw
             if (!straightOk) notes.Add("Straightened view not drawn: " + cerr);
 
             string template = string.IsNullOrWhiteSpace(o.Template) ? app.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateDrawing) : o.Template;
-            var (W, H, code) = Paper(o.Paper);
-            var doc = app.NewDocument(template, code, W, H) as IModelDoc2;
+            var (W0, H0, code0) = Paper(o.Paper ?? DrawingPaper.A3);
+            var doc = app.NewDocument(template, code0, W0, H0) as IModelDoc2;
             if (doc == null) { error = "SOLIDWORKS could not create a drawing from the template: " + template; return null; }
             var drw = (IDrawingDoc)doc;
+            var sheet = drw.GetCurrentSheet() as ISheet;
+            string sheetName = sheet?.GetName() ?? "Sheet1";
+            if (o.Paper.HasValue)
+            {
+                // Chosen size: the standard SOLIDWORKS sheet format of that size (template enum value = paper enum value for A4–A1).
+                drw.SetupSheet5(sheetName, code0, code0, 1, 1, o.FirstAngle, "", W0, H0, "Default", true);
+                sheet = drw.GetCurrentSheet() as ISheet;
+            }
+            double W = W0, H = H0;
+            if (sheet != null) { double w = 0, h = 0; sheet.GetSize(ref w, ref h); if (w > 0 && h > 0) { W = w; H = h; } }
+            var props = SwUtil.D((object)sheet?.GetProperties2());
+            int code = props != null && props.Length > 1 ? (int)props[0] : code0, templIn = props != null && props.Length > 1 ? (int)props[1] : code0;
+            string sheetFormat = sheet?.GetTemplateName() ?? "";
 
             var table = BendTable.Build(path.Primitives);
             var samples = path.Primitives.SelectMany(p => p.Sample(Math.Max(path.Profile.OuterDiameter, path.DevelopedLength / 400)).Select(x => x.point)).ToList();
@@ -146,10 +168,8 @@ namespace TubeWorks.AddIn.Sw
             double ez = samples.Max(p => p.Z) - samples.Min(p => p.Z) + 2 * r;
 
             // ---------------- Sheet 1: views, centreline, bend table, notes
-            var sheet = drw.GetCurrentSheet() as ISheet;
             double scale = PickScale(Math.Max(ex, Math.Max(ey, ez)), Math.Min(W * 0.24, H * 0.32));
             sheet?.SetScale(scale >= 1 ? scale : 1, scale >= 1 ? 1 : 1 / scale, true, true);
-            sheet?.SetProperties2(code, (int)swDwgTemplates_e.swDwgTemplateNone, scale >= 1 ? scale : 1, scale >= 1 ? 1 : 1 / scale, o.FirstAngle, W, H, true);
 
             // First-angle arrangement (ISO): the top view below the front view, the view from the right on the left.
             double fx = W * 0.30, fy = H * 0.62;
@@ -160,7 +180,7 @@ namespace TubeWorks.AddIn.Sw
 
             // Centreline view: isometric projection of the centreline, drawn as a sheet sketch.
             drw.EditSheet();
-            DrawCentreline(doc, path, table, W * 0.43, H * 0.10, W * 0.20, H * 0.22);
+            DrawCentreline(doc, path, table, W * 0.43, H * 0.30, W * 0.18, H * 0.20, scale);
 
             // Bend table.
             InsertBendTable(drw, table, W * 0.66, H * 0.95);
@@ -176,30 +196,40 @@ namespace TubeWorks.AddIn.Sw
                 $"BENDS: {table.Rows.Count}   OVERALL ENVELOPE: {I(ex)} x {I(ey)} x {I(ez)} mm (X x Y x Z)\n" +
                 $"SCALE {ScaleText(scale)}   {(o.FirstAngle ? "FIRST ANGLE PROJECTION (ISO)" : "THIRD ANGLE PROJECTION")}\n" +
                 "NO STRETCH OR SPRINGBACK COMPENSATION INCLUDED. GENERATED BY TUBEWORKS.",
-                W * 0.03, H * 0.16);
+                W * 0.04, H * 0.30);
 
-            // ---------------- Sheet 2: straightened tube and developed surface
-            if (straightOk || pattern != null)
+            // ---------------- Sheet 2: straightened tube, bending layout of the straight bar, developed surface
             {
-                double straightScale = PickScale(path.DevelopedLength, W * 0.85);
-                drw.NewSheet3("Straightened", code, (int)swDwgTemplates_e.swDwgTemplateNone,
-                    straightScale >= 1 ? straightScale : 1, straightScale >= 1 ? 1 : 1 / straightScale, o.FirstAngle, "", W, H, "");
+                var lib = LibraryStore.Load();
+                var preset = lib.Match(path.Profile);
+                var comp = Compensation.Apply(table, preset?.Compensation);
+                double barLen = comp.CutLength;
+                double s2 = PickScale(barLen, W * 0.80);
+                drw.NewSheet3("Straightened", code, templIn, s2 >= 1 ? s2 : 1, s2 >= 1 ? 1 : 1 / s2, o.FirstAngle, sheetFormat, W, H, "");
                 if (straightOk)
                 {
                     var up = TubeUnbender.ForFeature(path, null).UnbentPath;
                     string view = BestSideView(up[0].StartTangent);
-                    var v = Place(drw, partPath, view, W * 0.5, H * 0.78, "STRAIGHTENED TUBE (" + StraightConfig + ")", doc, notes);
+                    var v = Place(drw, partPath, view, W * 0.5, H * 0.84, "STRAIGHTENED TUBE (" + StraightConfig + ")", doc, notes);
                     if (v != null) { v.ReferencedConfiguration = StraightConfig; }
                 }
+                drw.EditSheet();
+                // Bending layout of the bar: marks, rotations and angles; 3 mm text on paper.
+                var layout = BendingLayout.Build(table, prof.OuterDiameter, comp, 0.003 / s2);
+                SheetSketch.Draw(doc, layout, W * 0.08, H * 0.62, s2, new DxfLayerSettings(), s2);
+                SheetSketch.Note(doc, $"BENDING LAYOUT OF THE STRAIGHT BAR  SCALE {ScaleText(s2)}  (marks measured from the bar start = feed end, at the bend start/tangent point)",
+                    W * 0.08, H * 0.735 + prof.OuterDiameter * s2, 0.0035);
+                InsertSequenceTable(drw, BendingLayout.Steps(table, comp), comp, W * 0.08, H * 0.52);
+                SheetSketch.Note(doc, "ROTATE = turn the tube about its axis before the bend, from the previous bend plane (" +
+                    (UserSettings.Current.RotationSign == RotationSign.RightHandAboutFeed ? "+ = right-hand about the feed direction" : "+ = left-hand about the feed direction") + ").\n" +
+                    string.Join("\n", comp.Notes), W * 0.55, H * 0.52, 0.0025);
                 if (pattern != null)
                 {
-                    drw.EditSheet();
-                    double ps = straightScale;
-                    if (pattern.Width * ps > H * 0.35) ps = PickScale(Math.Max(pattern.Length / (W * 0.85), pattern.Width / (H * 0.35)), 1);
-                    SheetSketch.Draw(doc, pattern, W * 0.075, H * 0.20, ps, new DxfLayerSettings());
-                    SheetSketch.Note(doc, $"DEVELOPED {o.Surface.ToString().ToUpperInvariant()} SURFACE  SCALE {ScaleText(ps)}  (export the 1:1 pattern with Unwrap Tube Surface)", W * 0.075, H * 0.17);
+                    double ps = PickScale(Math.Max(pattern.Length / (W * 0.80), pattern.Width / (H * 0.22)), 1);
+                    SheetSketch.Draw(doc, pattern, W * 0.08, H * 0.10, ps, new DxfLayerSettings(), s2);
+                    SheetSketch.Note(doc, $"DEVELOPED {o.Surface.ToString().ToUpperInvariant()} SURFACE  SCALE {ScaleText(ps)}  (1:1 file: Unwrap Tube Surface)", W * 0.08, H * 0.10 + pattern.Width * ps + 0.008);
                 }
-                drw.ActivateSheet((SwUtil.Arr<string>((object)drw.GetSheetNames()).FirstOrDefault()) ?? "");
+                drw.ActivateSheet(sheetName);
             }
             doc.ForceRebuild3(true);
             doc.ViewZoomtofit2();
@@ -224,7 +254,7 @@ namespace TubeWorks.AddIn.Sw
             return c.OrderBy(t => t.Item2).First().Item1;
         }
 
-        private static void DrawCentreline(IModelDoc2 doc, TubePath path, BendTable table, double x0, double y0, double w, double h)
+        private static void DrawCentreline(IModelDoc2 doc, TubePath path, BendTable table, double x0, double y0, double w, double h, double sheetScale)
         {
             // Isometric projection: X' = (x - z)·cos30°, Y' = y + (x + z)·sin30°.
             Point2 P(Vec3 v) => new Point2((v.X - v.Z) * Math.Cos(Math.PI / 6), v.Y + (v.X + v.Z) * 0.5);
@@ -242,7 +272,7 @@ namespace TubeWorks.AddIn.Sw
                 pat.Texts.Add(new PatternText { Layer = PatternLayer.Text, At = new Point2(q.X - minX, q.Y - minY), Height = 0.003 / k, Text = "B" + row.Number });
             }
             pat.Simplify(1e-9);
-            SheetSketch.Draw(doc, pat, x0, y0, k, new DxfLayerSettings());
+            SheetSketch.Draw(doc, pat, x0, y0, k, new DxfLayerSettings(), sheetScale);
             SheetSketch.Note(doc, "CENTRELINE (ISOMETRIC PROJECTION, NOT TO SCALE)", x0, y0 - 0.006, 0.003);
         }
 
@@ -263,6 +293,23 @@ namespace TubeWorks.AddIn.Sw
             }
             tab.Text[rows - 1, 0] = "TOTAL";
             tab.Text[rows - 1, 1] = (t.TotalDevelopedLength * 1000).ToString("0.##", CultureInfo.InvariantCulture);
+        }
+
+        private static void InsertSequenceTable(IDrawingDoc drw, List<BendingStep> steps, CompensatedData comp, double x, double y)
+        {
+            string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+            var tab = drw.InsertTableAnnotation2(false, x, y, (int)swBOMConfigurationAnchorType_e.swBOMConfigurationAnchor_TopLeft, "", steps.Count + 2, 7) as ITableAnnotation;
+            if (tab == null) return;
+            string[] head = { "STEP", "MARK AT (MM)", "BEND CENTRE AT (MM)", "ROTATE (°)", "BEND (°)", "COMMAND (°)", "CLR (MM)" };
+            for (int c = 0; c < head.Length; c++) tab.Text[0, c] = head[c];
+            for (int i = 0; i < steps.Count; i++)
+            {
+                var st = steps[i];
+                string[] row = { "B" + st.Number, F(st.MarkStart * 1000), F(st.MarkCentre * 1000), F(st.RotationDeg), F(st.DesignDeg), F(st.CommandDeg), F(st.Clr * 1000) };
+                for (int c = 0; c < row.Length; c++) tab.Text[i + 1, c] = row[c];
+            }
+            tab.Text[steps.Count + 1, 0] = "CUT";
+            tab.Text[steps.Count + 1, 1] = F(comp.CutLength * 1000);
         }
 
         /// <summary>Configuration "TW Straight" in which only the Tube Flat Pattern is unsuppressed.</summary>

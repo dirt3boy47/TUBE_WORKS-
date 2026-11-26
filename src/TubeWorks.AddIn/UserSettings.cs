@@ -25,6 +25,7 @@ namespace TubeWorks.AddIn
         /// SOLIDWORKS 2026 SP4 closed during this step (crash report of 2026-11-26). Bend lines are always in the DXF, DWG and drawing.
         /// </summary>
         public bool MarkBendLinesOnBlank { get; set; }
+        public string LastDrawingTemplate { get; set; } = "";
         public RotationSign RotationSign { get; set; } = RotationSign.RightHandAboutFeed;
         public AngleConvention AngleConvention { get; set; } = AngleConvention.BendAngle;
         public LengthUnit TableUnit { get; set; } = LengthUnit.Millimetre;

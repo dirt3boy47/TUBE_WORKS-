@@ -10,7 +10,7 @@ Native SOLIDWORKS add-in for parametric circular tube design: select a tube end 
 
 ## Install
 
-Run `TubeWorksSetup-0.4.0.exe` (from the CI artifact or `installer/build-installer.sh`) as Administrator with SOLIDWORKS closed. See [docs/BUILD-AND-INSTALL.md](docs/BUILD-AND-INSTALL.md).
+Run `TubeWorksSetup-0.4.1.exe` (from the CI artifact or `installer/build-installer.sh`) as Administrator with SOLIDWORKS closed. See [docs/BUILD-AND-INSTALL.md](docs/BUILD-AND-INSTALL.md).
 
 ## Build from source
 
